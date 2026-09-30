@@ -1,0 +1,80 @@
+# -----------------------------------------------------------------------------
+# Copyright (c) Anaconda, Inc., and Bokeh Contributors.
+# All rights reserved.
+#
+# The full license is in the file LICENSE.txt, distributed with this software.
+# -----------------------------------------------------------------------------
+""" Provide a base class and useful functions for Bokeh Sphinx directives.
+
+"""
+
+# -----------------------------------------------------------------------------
+# Boilerplate
+# -----------------------------------------------------------------------------
+from __future__ import annotations
+
+import logging  # isort:skip
+
+log = logging.getLogger(__name__)
+
+# -----------------------------------------------------------------------------
+# Imports
+# -----------------------------------------------------------------------------
+
+# Standard library imports
+import re
+from typing import Any, cast
+
+# External imports
+from docutils import nodes
+from docutils.statemachine import ViewList
+from sphinx.util.docutils import SphinxDirective
+from sphinx.util.nodes import nested_parse_with_titles
+
+# -----------------------------------------------------------------------------
+# Globals and constants
+# -----------------------------------------------------------------------------
+
+# taken from Sphinx autodoc, all we use is the "thing name", e.g. model name
+py_sig_re = re.compile(
+    r"""^ (?:[\w.]*\.)?            # class name(s)
+          (\w+)  \s*               # thing name
+          (?: \((?:.*)\)           # optional: arguments
+           (?:\s* -> \s* (?:.*))?  # return annotation
+          )? $                     # and nothing more
+          """,
+    re.VERBOSE,
+)
+
+__all__ = (
+    "BokehDirective",
+)
+
+# -----------------------------------------------------------------------------
+# General API
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Dev API
+# -----------------------------------------------------------------------------
+
+
+class BokehDirective(SphinxDirective):
+
+    def parse(self, rst_text: str, annotation: str) -> list[Any]:
+        result: ViewList[str] = ViewList()
+        for line in rst_text.split("\n"):
+            result.append(line, annotation)
+        node = nodes.paragraph()
+        node.document = self.state.document
+        nested_parse_with_titles(self.state, cast(Any, result), node)
+        return node.children
+
+
+# -----------------------------------------------------------------------------
+# Private API
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Code
+# -----------------------------------------------------------------------------

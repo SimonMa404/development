@@ -1,0 +1,46 @@
+import type { Transform } from "./base";
+import { BaseGLGlyph } from "./base";
+import type { ReglWrapper } from "./regl_wrap";
+import type { GlyphView } from "../glyph";
+import type { PatchView } from "../patch";
+import type { Elements } from "regl";
+import type { RingLineData } from "../../../core/util/polygon";
+export declare class PatchGL extends BaseGLGlyph {
+    readonly glyph: PatchView;
+    private _positions?;
+    private _edge_distance?;
+    _elements: Elements | null;
+    private _pv_fill_color;
+    private _pv_hatch_patterns;
+    private _pv_hatch_scales;
+    private _pv_hatch_weights;
+    private _pv_hatch_rgba;
+    private _fill_color;
+    private _have_hatch;
+    private readonly _hatch_patterns;
+    private readonly _hatch_scales;
+    private readonly _hatch_weights;
+    private readonly _hatch_rgba;
+    private _line_points_buf?;
+    private _line_show_buf?;
+    private readonly _linewidth;
+    private readonly _line_color;
+    private readonly _line_cap;
+    private readonly _line_join;
+    private _is_dashed;
+    private _length_so_far_buf?;
+    private _dash_tex;
+    private _dash_tex_info?;
+    private _dash_scale?;
+    private _dash_offset?;
+    _triangle_count: number;
+    _nvertices: number;
+    _ring_data: RingLineData[];
+    private _pv_dirty;
+    private _topology?;
+    constructor(regl_wrapper: ReglWrapper, glyph: PatchView);
+    draw(_indices: number[], main_glyph: GlyphView, transform: Transform): void;
+    _set_data(data_changed?: boolean): void;
+    private _set_visuals;
+}
+//# sourceMappingURL=patch.d.ts.map

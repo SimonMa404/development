@@ -1,0 +1,93 @@
+{
+  "munich_dynamic_world_bare.png": {
+    "png": "assets/overlays/munich/munich_dynamic_world_bare.png",
+    "bounds": [
+      [
+        47.82,
+        11.38
+      ],
+      [
+        48.3,
+        11.860000000000001
+      ]
+    ]
+  },
+  "munich_dynamic_world_built.png": {
+    "png": "assets/overlays/munich/munich_dynamic_world_built.png",
+    "bounds": [
+      [
+        47.82,
+        11.38
+      ],
+      [
+        48.3,
+        11.860000000000001
+      ]
+    ]
+  },
+  "munich_dynamic_world_grass.png": {
+    "png": "assets/overlays/munich/munich_dynamic_world_grass.png",
+    "bounds": [
+      [
+        47.82,
+        11.38
+      ],
+      [
+        48.3,
+        11.860000000000001
+      ]
+    ]
+  },
+  "munich_dynamic_world_trees.png": {
+    "png": "assets/overlays/munich/munich_dynamic_world_trees.png",
+    "bounds": [
+      [
+        47.82,
+        11.38
+      ],
+      [
+        48.3,
+        11.860000000000001
+      ]
+    ]
+  },
+  "munich_dynamic_world_water.png": {
+    "png": "assets/overlays/munich/munich_dynamic_world_water.png",
+    "bounds": [
+      [
+        47.82,
+        11.38
+      ],
+      [
+        48.3,
+        11.860000000000001
+      ]
+    ]
+  },
+  "munich_lst_mean_2023_2024.png": {
+    "png": "assets/overlays/munich/munich_lst_mean_2023_2024.png",
+    "bounds": [
+      [
+        47.82,
+        11.38
+      ],
+      [
+        48.3,
+        11.860000000000001
+      ]
+    ]
+  },
+  "munich_ndvi_2024.png": {
+    "png": "assets/overlays/munich/munich_ndvi_2024.png",
+    "bounds": [
+      [
+        47.82,
+        11.38
+      ],
+      [
+        48.3,
+        11.860000000000001
+      ]
+    ]
+  }
+}
