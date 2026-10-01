@@ -1,0 +1,378 @@
+layers:
+  - id: planegg-boundary
+    title: Planegg Boundary
+    short_title: Planegg Boundary
+    description: Official municipal boundary of Planegg (Gemeinde), Bavaria, from the BKG VG250 administrative dataset.
+    layer_type: vector
+    thematic_group: Administrative
+    area: planegg
+    storage_backend: local
+    relative_path: vectors/processed/planegg/boundary.geojson
+    data_format: geojson
+    source: "BKG VG250 (2026-01-01 release)"
+    attribution: "© GeoBasis-DE / BKG"
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.385189
+      miny: 48.078465
+      maxx: 11.463442
+      maxy: 48.120001
+    acquisition_date: "2026-01-01"
+    default_visible: false
+    default_opacity: 1.0
+    default_order: 1
+    min_zoom: 8
+    max_zoom: 20
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "boundary"
+      opacity: 1.0
+    legend:
+      type: categorical
+      palette:
+        - "#0f172a"
+      labels:
+        - "Municipal boundary"
+    analysis_capabilities:
+      - area_statistics
+    tags:
+      - boundary
+      - administrative
+      - planegg
+    is_demo: false
+
+  - id: planegg-boundary-buffered
+    title: Planegg Analysis Region (500m buffer)
+    short_title: ROI (buffered)
+    description: Planegg municipal boundary buffered by 500m, used as the region of interest for raster data exports.
+    layer_type: vector
+    thematic_group: Administrative
+    area: planegg
+    storage_backend: local
+    relative_path: vectors/processed/planegg/boundary_buffered.geojson
+    data_format: geojson
+    source: "BKG VG250 (2026-01-01 release), 500m buffer"
+    attribution: "© GeoBasis-DE / BKG"
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.378476
+      miny: 48.073969
+      maxx: 11.470156
+      maxy: 48.124493
+    acquisition_date: "2026-01-01"
+    default_visible: false
+    default_opacity: 0.4
+    default_order: 2
+    min_zoom: 8
+    max_zoom: 20
+    inspectable: false
+    selectable: true
+    style:
+      color_scale: "context"
+      opacity: 0.4
+    legend:
+      type: categorical
+      palette:
+        - "#64748b"
+      labels:
+        - "Analysis region (500m buffer)"
+    analysis_capabilities: []
+    tags:
+      - boundary
+      - context
+      - planegg
+    is_demo: false
+
+  - id: ndvi-planegg
+    title: Vegetation Health (NDVI)
+    short_title: Vegetation Health (NDVI)
+    description: Normalized Difference Vegetation Index derived from Sentinel-2 surface reflectance (median composite, May–Sep 2025).
+    layer_type: raster
+    thematic_group: Vegetation
+    area: planegg
+    storage_backend: local
+    relative_path: rasters/processed/planegg/ndvi.tif
+    data_format: geotiff
+    source: "Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine"
+    attribution: "Copernicus Sentinel-2 / ESA, processed via Google Earth Engine"
+    units: "NDVI"
+    value_type: continuous
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.378421
+      miny: 48.073881
+      maxx: 11.470229
+      maxy: 48.124546
+    acquisition_date: "2025-09-30"
+    temporal_start: "2025-05-01"
+    temporal_end: "2025-09-30"
+    spatial_resolution: 10
+    nodata: 0
+    value_range:
+      minimum: -1.0
+      maximum: 1.0
+    default_visible: true
+    default_opacity: 0.75
+    default_order: 10
+    min_zoom: 8
+    max_zoom: 18
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "ndvi"
+      interpolation: "linear"
+      opacity: 0.75
+    legend:
+      type: continuous
+      palette:
+        - "#8B4513"
+        - "#d73027"
+        - "#fee08b"
+        - "#ffffbf"
+        - "#a6d96a"
+        - "#1a9850"
+        - "#00441b"
+      labels:
+        - "No vegetation"
+        - "Low vegetation"
+        - "Moderate vegetation"
+        - "Dense vegetation"
+        - "Very dense vegetation"
+    analysis_capabilities:
+      - point_value
+      - area_statistics
+    tags:
+      - vegetation
+      - ndvi
+      - sentinel-2
+      - planegg
+    is_demo: false
+
+  - id: lst-planegg
+    title: Surface Temperature
+    short_title: Surface Temperature
+    description: Mean land surface temperature derived from Landsat 8/9 Collection 2 Level 2 thermal band (cloud cover < 3%, last 2 years).
+    layer_type: raster
+    thematic_group: Heat
+    area: planegg
+    storage_backend: local
+    relative_path: rasters/processed/planegg/lst.tif
+    data_format: geotiff
+    source: "Landsat 8/9 Collection 2 Level 2 (LANDSAT/LC08-09/C02/T1_L2), Google Earth Engine"
+    attribution: "USGS/NASA Landsat, processed via Google Earth Engine"
+    units: "°C"
+    value_type: continuous
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.378421
+      miny: 48.073881
+      maxx: 11.470229
+      maxy: 48.124546
+    acquisition_date: "2026-09-25"
+    temporal_start: "2024-09-25"
+    temporal_end: "2026-09-25"
+    spatial_resolution: 30
+    nodata: 0
+    value_range:
+      minimum: 18
+      maximum: 32
+    default_visible: true
+    default_opacity: 0.75
+    default_order: 20
+    min_zoom: 8
+    max_zoom: 18
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "temperature"
+      interpolation: "linear"
+      opacity: 0.75
+    legend:
+      type: continuous
+      palette:
+        - "#313695"
+        - "#4575b4"
+        - "#74add1"
+        - "#abd9e9"
+        - "#e0f3f8"
+        - "#fee090"
+        - "#fdae61"
+        - "#f46d43"
+        - "#d73027"
+    analysis_capabilities:
+      - point_value
+      - area_statistics
+    tags:
+      - heat
+      - lst
+      - landsat
+      - planegg
+    is_demo: false
+
+  - id: lulc-planegg
+    title: Planegg Land Cover Classes
+    short_title: LULC
+    description: Dominant land-cover class (annual mode composite, 2025) from Google Dynamic World V1.
+    layer_type: raster
+    thematic_group: Land Cover
+    area: planegg
+    storage_backend: local
+    relative_path: rasters/processed/planegg/lulc.tif
+    data_format: geotiff
+    source: "Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine"
+    attribution: "Google Dynamic World, processed via Google Earth Engine"
+    units: "class"
+    value_type: categorical
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.378421
+      miny: 48.073881
+      maxx: 11.470229
+      maxy: 48.124546
+    acquisition_date: "2025-12-31"
+    temporal_start: "2025-01-01"
+    temporal_end: "2025-12-31"
+    spatial_resolution: 10
+    nodata: -2147483648
+    value_range:
+      minimum: 0
+      maximum: 8
+    default_visible: false
+    default_opacity: 0.8
+    default_order: 30
+    min_zoom: 8
+    max_zoom: 18
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "categorical"
+      interpolation: "nearest"
+      opacity: 0.8
+    legend:
+      type: categorical
+      palette:
+        - "#419BDF"
+        - "#397D49"
+        - "#88B053"
+        - "#7A87C6"
+        - "#E49635"
+        - "#DFC35A"
+        - "#C4281B"
+        - "#A59B8F"
+        - "#B39FE1"
+      labels:
+        - "Water"
+        - "Trees"
+        - "Grass"
+        - "Flooded vegetation"
+        - "Crops"
+        - "Shrub & scrub"
+        - "Built area"
+        - "Bare ground"
+        - "Snow & ice"
+    analysis_capabilities:
+      - point_value
+      - area_statistics
+    tags:
+      - land-cover
+      - lulc
+      - dynamic-world
+      - planegg
+    is_demo: false
+
+  - id: buildings-3d-planegg
+    title: 3D Buildings (LoD2) – Planegg
+    short_title: 3D Buildings
+    description: Building footprints and heights extracted from Bayern LoD2 CityGML tiles for the Planegg analysis region.
+    layer_type: vector
+    thematic_group: Built Environment
+    area: planegg
+    storage_backend: local
+    relative_path: vectors/processed/planegg/buildings_3d.geojson
+    data_format: geojson
+    source: "BayernWolke LoD2 CityGML"
+    attribution: "© Bayerische Vermessungsverwaltung"
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.378421
+      miny: 48.073881
+      maxx: 11.470229
+      maxy: 48.124546
+    acquisition_date: "2023-12-05"
+    spatial_resolution: 1
+    default_visible: true
+    default_opacity: 0.9
+    default_order: 35
+    min_zoom: 11
+    max_zoom: 20
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "buildings3d"
+      opacity: 0.75
+    legend:
+      type: categorical
+      palette:
+        - "#6b7280"
+      labels:
+        - "Building extrusion"
+    analysis_capabilities:
+      - point_value
+    tags:
+      - buildings
+      - citygml
+      - lod2
+      - 3d
+      - planegg
+    is_demo: false
+
+  - id: census-2022-100m-planegg
+    title: Census 2022 Population Grid (100m)
+    short_title: Census Population (100m)
+    description: ROI-filtered 100m German Census 2022 grid with population counts and age shares (65+ and under 18).
+    layer_type: vector
+    thematic_group: Demography
+    area: planegg
+    storage_backend: local
+    relative_path: vectors/processed/planegg/census_2022_100m.geojson
+    data_format: geojson
+    source: "German Census 2022 (Zensus 2022), accessed via z22data repository"
+    attribution: "© Statistische Ämter des Bundes und der Länder; data prepared via z22data"
+    native_crs: EPSG:4326
+    acquisition_date: "2022-05-15"
+    spatial_resolution: 100
+    default_visible: false
+    default_opacity: 0.6
+    default_order: 40
+    min_zoom: 10
+    max_zoom: 20
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "population"
+      opacity: 0.6
+    legend:
+      type: continuous
+      palette:
+        - "#e2e8f0"
+        - "#93c5fd"
+        - "#3b82f6"
+        - "#f59e0b"
+        - "#ef4444"
+      labels:
+        - "0"
+        - "25"
+        - "100"
+        - "250"
+        - "500+"
+    analysis_capabilities:
+      - heat_vulnerability
+    tags:
+      - census
+      - zensus2022
+      - population
+      - elderly
+      - children
+      - planegg
+    is_demo: false

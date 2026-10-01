@@ -1,0 +1,129 @@
+export type PolygonGeometry = {
+  type: "Polygon";
+  coordinates: number[][][];
+};
+
+export type Histogram = {
+  bin_edges: number[];
+  counts: number[];
+};
+
+export type ClassBreakdownItem = {
+  class_index: number;
+  label: string;
+  color: string;
+  count: number;
+  percentage: number;
+};
+
+export type StatsBlock = {
+  count: number;
+  minimum: number;
+  maximum: number;
+  mean: number;
+  median: number;
+  stddev: number;
+  histogram?: Histogram | null;
+  class_breakdown?: ClassBreakdownItem[] | null;
+};
+
+export type LayerAreaStatistics = {
+  layer_id: string;
+  title?: string;
+  units?: string;
+  value_type?: string;
+  legend?: { type: string; palette: string[]; labels?: string[] } | null;
+  value_range?: { minimum: number; maximum: number } | null;
+  selected: StatsBlock;
+  baseline: StatsBlock;
+};
+
+export type AreaStatisticsResponse = {
+  results: LayerAreaStatistics[];
+};
+
+export type AreaStatisticsRequest = {
+  geometry: PolygonGeometry;
+  layer_ids: string[];
+};
+
+export type BuildingContextLayerStatistics = {
+  layer_id: string;
+  title?: string;
+  units?: string;
+  value_type?: string;
+  legend?: { type: string; palette: string[]; labels?: string[] } | null;
+  value_range?: { minimum: number; maximum: number } | null;
+  selected: StatsBlock;
+  average_building: StatsBlock;
+};
+
+export type BuildingContextRequest = {
+  geometry: Record<string, unknown>;
+  layer_ids: string[];
+  buildings_layer_id?: string;
+  buffer_meters?: number;
+};
+
+export type BuildingContextResponse = {
+  results: BuildingContextLayerStatistics[];
+};
+
+export type BuildingOverviewLayerStatistics = {
+  layer_id: string;
+  title?: string;
+  units?: string;
+  value_type?: string;
+  legend?: { type: string; palette: string[]; labels?: string[] } | null;
+  value_range?: { minimum: number; maximum: number } | null;
+  buildings: StatsBlock;
+};
+
+export type BuildingOverviewRequest = {
+  layer_ids: string[];
+  buildings_layer_id?: string;
+};
+
+export type BuildingOverviewResponse = {
+  results: BuildingOverviewLayerStatistics[];
+};
+
+export type HeatExposureBin = {
+  label: string;
+  minimum_c?: number | null;
+  maximum_c?: number | null;
+  population?: number | null;
+  elderly_population?: number | null;
+  children_population?: number | null;
+};
+
+export type VulnerabilitySummary = {
+  census_cells: number;
+  total_population?: number | null;
+  elderly_population?: number | null;
+  elderly_share?: number | null;
+  children_population?: number | null;
+  children_share?: number | null;
+  missing_elderly_population?: number | null;
+  missing_children_population?: number | null;
+};
+
+export type HeatVulnerabilityResult = {
+  census_layer_id: string;
+  lst_layer_id?: string | null;
+  ndvi_layer_id?: string | null;
+  summary: VulnerabilitySummary;
+  lst_exposure_bins?: HeatExposureBin[] | null;
+  ndvi_exposure_bins?: HeatExposureBin[] | null;
+};
+
+export type HeatVulnerabilityRequest = {
+  geometry: PolygonGeometry;
+  census_layer_id?: string;
+  lst_layer_id?: string | null;
+  ndvi_layer_id?: string | null;
+};
+
+export type HeatVulnerabilityResponse = {
+  result: HeatVulnerabilityResult;
+};
