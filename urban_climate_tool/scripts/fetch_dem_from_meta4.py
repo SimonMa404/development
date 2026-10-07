@@ -12,106 +12,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import sys
 from pathlib import Path
 
 import geopandas as gpd
-import requests
 import rasterio
 from rasterio.mask import mask
 from rasterio.merge import merge
-from lxml import etree
+
+from meta4_importer import download_entries, filter_entries_by_extension, parse_meta4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = REPO_ROOT / "storage" / "rasters" / "source" / "dem_1m"
 PROCESSED_DIR = REPO_ROOT / "storage" / "rasters" / "processed" / "planegg"
 OUTPUT_PATH = PROCESSED_DIR / "dem_1m.tif"
 BOUNDARY_PATH = REPO_ROOT / "storage" / "vectors" / "processed" / "planegg" / "boundary_buffered.geojson"
-
-META_NS = {"m": "urn:ietf:params:xml:ns:metalink"}
-
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def parse_meta4(meta4_path: Path) -> list[dict[str, object]]:
-    root = etree.fromstring(meta4_path.read_bytes())
-    entries: list[dict[str, object]] = []
-
-    for file_elem in root.xpath("//m:file", namespaces=META_NS):
-        name = file_elem.get("name")
-        if not name:
-            continue
-        size_elem = file_elem.find("m:size", namespaces=META_NS)
-        hash_elem = file_elem.find("m:hash[@type='sha-256']", namespaces=META_NS)
-        url_elems = file_elem.findall("m:url", namespaces=META_NS)
-
-        if size_elem is None or hash_elem is None or not hash_elem.text:
-            continue
-
-        urls = [u.text.strip() for u in url_elems if u.text and u.text.strip()]
-        if not urls:
-            continue
-
-        entries.append(
-            {
-                "name": name,
-                "size": int(size_elem.text),
-                "sha256": hash_elem.text.strip().lower(),
-                "urls": urls,
-            }
-        )
-
-    return entries
-
-
-def validate_download(path: Path, expected_size: int, expected_sha256: str) -> bool:
-    if not path.exists():
-        return False
-    if path.stat().st_size != expected_size:
-        return False
-    return file_sha256(path) == expected_sha256
-
-
-def download_entry(entry: dict[str, object], force: bool = False) -> Path:
-    name = str(entry["name"])
-    expected_size = int(entry["size"])
-    expected_sha256 = str(entry["sha256"])
-    urls = list(entry["urls"])  # type: ignore[arg-type]
-
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    dest = RAW_DIR / name
-
-    if dest.exists() and not force and validate_download(dest, expected_size, expected_sha256):
-        print(f"[skip] {name} already valid")
-        return dest
-
-    for url in urls:
-        print(f"[download] {name} <- {url}")
-        try:
-            with requests.get(url, stream=True, timeout=120) as response:
-                response.raise_for_status()
-                tmp = dest.with_suffix(dest.suffix + ".part")
-                with tmp.open("wb") as fh:
-                    for chunk in response.iter_content(chunk_size=1 << 20):
-                        if chunk:
-                            fh.write(chunk)
-                tmp.rename(dest)
-            if validate_download(dest, expected_size, expected_sha256):
-                print(f"  -> ok ({dest.stat().st_size / 1e6:.1f} MB)")
-                return dest
-            print(f"  !! validation failed for {name} from {url}", file=sys.stderr)
-        except requests.RequestException as exc:
-            print(f"  !! failed {url}: {exc}", file=sys.stderr)
-
-    raise RuntimeError(f"Failed to download valid file for {name}")
-
 
 def build_dem_mosaic_clipped(tile_paths: list[Path], output_path: Path) -> None:
     if not BOUNDARY_PATH.exists():
@@ -191,7 +105,7 @@ def main() -> None:
     if not entries:
         raise SystemExit("No downloadable files found in meta4.")
 
-    dem_entries = [e for e in entries if str(e["name"]).lower().endswith(accepted_ext)]
+    dem_entries = filter_entries_by_extension(entries, accepted_ext)
     if not dem_entries:
         sample = ", ".join(str(e["name"]) for e in entries[:5])
         raise SystemExit(
@@ -199,9 +113,7 @@ def main() -> None:
             f"{accepted_ext}. First entries are: {sample}"
         )
 
-    downloaded: list[Path] = []
-    for entry in dem_entries:
-        downloaded.append(download_entry(entry, force=args.force))
+    downloaded = download_entries(dem_entries, dest_dir=RAW_DIR, force=args.force)
 
     # Ensure only raster files are used in mosaic.
     raster_files = [p for p in downloaded if p.suffix.lower() in {".tif", ".tiff"}]

@@ -42,6 +42,28 @@ export type AreaStatisticsResponse = {
   results: LayerAreaStatistics[];
 };
 
+export type TreeStatisticsResult = {
+  layer_id: string;
+  title?: string;
+  tree_count: number;
+  area_hectares: number;
+  tree_density_per_hectare?: number | null;
+  mean_height?: number | null;
+  median_height?: number | null;
+  maximum_height?: number | null;
+  minimum_height?: number | null;
+  mean_ground_elevation?: number | null;
+};
+
+export type TreeStatisticsRequest = {
+  geometry: PolygonGeometry;
+  layer_id?: string;
+};
+
+export type TreeStatisticsResponse = {
+  result: TreeStatisticsResult;
+};
+
 export type AreaStatisticsRequest = {
   geometry: PolygonGeometry;
   layer_ids: string[];

@@ -21,3 +21,6 @@ frontend/.next/
 .env.*.local
 .DS_Store
 Thumbs.db
+
+# Local large source datasets
+/data/*.gpkg

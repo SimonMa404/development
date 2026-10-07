@@ -16,8 +16,26 @@ class LocalVectorRepository(LocalRepository):
 
     def read_geojson(self, relative_path: str, bbox: list[float] | None = None) -> dict:
         path = self.vector_path(relative_path)
-        gdf = gpd.read_file(path)
-        if bbox:
-            minx, miny, maxx, maxy = bbox
-            gdf = gdf.cx[minx:maxx, miny:maxy]
+        gdf = self.read_frame(relative_path, bbox=bbox)
         return gdf.__geo_interface__
+
+    def read_frame(self, relative_path: str, bbox: list[float] | None = None) -> gpd.GeoDataFrame:
+        path = self.vector_path(relative_path)
+        suffix = path.suffix.lower()
+        bounds = tuple(bbox) if bbox and len(bbox) == 4 else None
+
+        if suffix in {".parquet", ".geoparquet"}:
+            try:
+                return gpd.read_parquet(path, bbox=bounds)
+            except TypeError:
+                gdf = gpd.read_parquet(path)
+        else:
+            try:
+                return gpd.read_file(path, bbox=bounds)
+            except TypeError:
+                gdf = gpd.read_file(path)
+
+        if bounds:
+            minx, miny, maxx, maxy = bounds
+            gdf = gdf.cx[minx:maxx, miny:maxy]
+        return gdf

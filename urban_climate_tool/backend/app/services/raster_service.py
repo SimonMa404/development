@@ -50,6 +50,11 @@ def _build_categorical_colormap(palette: list[str]) -> ColorMap:
 
 
 class RasterService:
+    TERRAIN_SOURCE_PATHS: dict[str, str] = {
+        "dem": "rasters/processed/planegg/dem_1m.tif",
+        "dom": "rasters/processed/planegg/dom_20cm.tif",
+    }
+
     def __init__(self, catalog_service: CatalogService | None = None):
         self.catalog_service = catalog_service or CatalogService()
         self.repository = LocalRasterRepository(settings.data_root_path)
@@ -84,6 +89,16 @@ class RasterService:
         except TileOutsideBounds as exc:
             raise LayerUnavailableError(f"Requested tile is outside raster bounds for layer '{layer_id}'.") from exc
 
+        is_rgb = layer.value_type == "rgb" or (layer.style and layer.style.color_scale == "rgb")
+        if is_rgb:
+            rgb = image.data
+            if rgb.shape[0] >= 3:
+                rgb = rgb[:3]
+            elif rgb.shape[0] == 1:
+                rgb = np.repeat(rgb, 3, axis=0)
+            rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+            return self._encode_rgb_png(rgb), "image/png"
+
         if is_categorical:
             colormap = _build_categorical_colormap(palette)
             png_bytes = image.render(img_format="PNG", colormap=colormap)
@@ -96,23 +111,33 @@ class RasterService:
 
         return png_bytes, "image/png"
 
-    def terrain_available(self) -> bool:
-        dem_path = self.repository.raster_path("rasters/processed/planegg/dem_1m.tif")
-        return dem_path.exists()
+    def terrain_available(self, source: str = "dem") -> bool:
+        source_path = self.TERRAIN_SOURCE_PATHS.get(source)
+        if source_path is None:
+            return False
+        return self.repository.raster_path(source_path).exists()
 
-    def get_terrain_tile(self, z: int, x: int, y: int) -> tuple[bytes, str]:
-        dem_path = self.repository.raster_path("rasters/processed/planegg/dem_1m.tif")
-        fallback_rgb = self._fetch_fallback_terrain_tile(z, x, y)
+    def terrain_sources_available(self) -> dict[str, bool]:
+        return {source: self.terrain_available(source) for source in self.TERRAIN_SOURCE_PATHS}
+
+    def get_terrain_tile(self, z: int, x: int, y: int, source: str = "dem") -> tuple[bytes, str]:
+        source_path = self.TERRAIN_SOURCE_PATHS.get(source)
+        if source_path is None:
+            raise LayerUnavailableError(f"Unsupported terrain source '{source}'.")
+
+        dem_path = self.repository.raster_path(source_path)
 
         if not dem_path.exists():
+            fallback_rgb = self._fetch_fallback_terrain_tile(z, x, y)
             if fallback_rgb is None:
-                raise LayerUnavailableError("DEM raster is missing and fallback terrain tile is unavailable.")
+                raise LayerUnavailableError(f"Terrain source '{source}' is missing and fallback terrain tile is unavailable.")
             return self._encode_rgb_png(fallback_rgb), "image/png"
 
         try:
             with Reader(dem_path) as reader:
                 image = reader.tile(x, y, z, tilesize=256)
         except TileOutsideBounds:
+            fallback_rgb = self._fetch_fallback_terrain_tile(z, x, y)
             if fallback_rgb is None:
                 raise LayerUnavailableError("Requested terrain tile is outside DEM bounds and fallback is unavailable.")
             return self._encode_rgb_png(fallback_rgb), "image/png"
@@ -121,7 +146,10 @@ class RasterService:
         valid_mask = np.isfinite(dem) & (dem > -1000.0) & (dem != 0.0)
         if image.mask is not None:
             valid_mask &= image.mask > 0
-        if fallback_rgb is None and np.any(valid_mask):
+
+        # Avoid blending local high-resolution terrain with fallback terrain-rgb.
+        # Mixing datasets creates severe seams/artifacts (especially in DOM mode).
+        if np.any(valid_mask):
             local_fill = float(np.median(dem[valid_mask]))
             dem = np.where(valid_mask, dem, local_fill)
         else:
@@ -133,11 +161,6 @@ class RasterService:
         g = np.floor(encoded % 256.0).astype(np.uint8)
         b = np.floor((encoded - np.floor(encoded)) * 256.0).astype(np.uint8)
         rgb = np.stack([r, g, b], axis=0)
-
-        if fallback_rgb is not None and not np.all(valid_mask):
-            fallback_copy = fallback_rgb.copy()
-            fallback_copy[:, valid_mask] = rgb[:, valid_mask]
-            rgb = fallback_copy
 
         return self._encode_rgb_png(rgb), "image/png"
 

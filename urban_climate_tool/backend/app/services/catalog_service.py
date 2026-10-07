@@ -37,15 +37,9 @@ class CatalogService:
             path = (root / layer.relative_path).resolve()
             if not str(path).startswith(str(root)):
                 raise DataValidationError(f"Layer '{layer.id}' resolves outside DATA_ROOT.")
-            if layer.layer_type == "raster" and not path.exists():
-                raise DataValidationError(f"Raster layer '{layer.id}' file is missing: {layer.relative_path}")
-            if layer.layer_type == "vector" and not path.exists():
-                raise DataValidationError(f"Vector layer '{layer.id}' file is missing: {layer.relative_path}")
-            if layer.layer_type == "point" and not path.exists():
-                raise DataValidationError(f"Point layer '{layer.id}' file is missing: {layer.relative_path}")
             if layer.layer_type == "raster" and layer.data_format.lower() not in {"geotiff", "tif", "tiff"}:
                 raise DataValidationError(f"Raster layer '{layer.id}' has unsupported data format '{layer.data_format}'.")
-            if layer.layer_type == "vector" and layer.data_format.lower() not in {"geojson", "gpkg", "shapefile", "shp"}:
+            if layer.layer_type == "vector" and layer.data_format.lower() not in {"geojson", "gpkg", "shapefile", "shp", "parquet", "geoparquet"}:
                 raise DataValidationError(f"Vector layer '{layer.id}' has unsupported data format '{layer.data_format}'.")
             if layer.legend is None and layer.layer_type in {"raster", "vector"}:
                 raise DataValidationError(f"Layer '{layer.id}' is missing legend metadata.")

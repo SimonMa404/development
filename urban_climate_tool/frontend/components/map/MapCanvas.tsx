@@ -17,10 +17,12 @@ const VECTOR_COLORS: Record<string, string> = {
   boundary: "#22d3ee",
   context: "#94a3b8",
   buildings3d: "#6b7280",
+  trees3d: "#166534",
   population: "#3b82f6",
 };
 
 export type BasemapId = "satellite" | "hybrid" | "dark";
+export type TerrainSourceId = "dem" | "dom";
 
 const ESRI_ATTRIBUTION = "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
 
@@ -54,13 +56,9 @@ const BASEMAP_STYLES: Record<BasemapId, ReturnType<typeof rasterStyle>> = {
   ),
   hybrid: rasterStyle(["https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"], "Imagery © Google", 20),
   dark: rasterStyle(
-    [
-      "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-    ],
-    "© OpenStreetMap contributors, © CARTO",
-    20,
+    ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
+    "Esri, HERE, Garmin, (c) OpenStreetMap contributors, and the GIS user community",
+    16,
   ),
 };
 
@@ -113,6 +111,7 @@ export function MapCanvas({
   onBuildingClick,
   basemap = "satellite",
   terrain3dEnabled = false,
+  terrainSource = "dem",
   terrainAvailable = false,
   terrainExaggeration = 1.8,
   hillshadeStrength = 0.7,
@@ -131,31 +130,50 @@ export function MapCanvas({
   }) => void;
   basemap?: BasemapId;
   terrain3dEnabled?: boolean;
+  terrainSource?: TerrainSourceId;
   terrainAvailable?: boolean;
   terrainExaggeration?: number;
   hillshadeStrength?: number;
   selectedBuildingId?: string | null;
 }) {
   const mapRef = useRef<MapRef>(null);
+  const previousTerrainEnabledRef = useRef(false);
   const [bearing, setBearing] = useState(0);
   const [terrainRevision, setTerrainRevision] = useState(0);
+  const domMode = terrainSource === "dom";
 
-  const visibleLayers = layers
-    .filter((layer) => layer.default_visible && layer.available)
-    .sort((a, b) => a.default_order - b.default_order);
+  const visibleLayers = useMemo(() => {
+    const isPriority3dLayer = (layer: CatalogLayer) =>
+      layer.layer_type === "vector" &&
+      (layer.style?.color_scale === "buildings3d" || layer.style?.color_scale === "trees3d");
+
+    const sorted = layers
+      .filter((layer) => layer.default_visible && layer.available)
+      .sort((a, b) => a.default_order - b.default_order);
+
+    const normalLayers = sorted.filter((layer) => !isPriority3dLayer(layer));
+    const priority3dLayers = sorted.filter(isPriority3dLayer);
+    return [...normalLayers, ...priority3dLayers];
+  }, [layers]);
 
   const interactiveLayerIds = useMemo(
     () =>
       visibleLayers
         .filter((layer) => layer.layer_type === "vector" && layer.style?.color_scale === "buildings3d")
-        .flatMap((layer) => [`${layer.id}-extrusion`, `${layer.id}-outline`]),
-    [visibleLayers],
+        .flatMap((layer) =>
+          domMode
+            ? [`${layer.id}-fill-2d`, `${layer.id}-outline-2d`]
+            : [`${layer.id}-extrusion-3d`, `${layer.id}-outline-3d`],
+        ),
+    [visibleLayers, domMode],
   );
 
   const handleClick = useCallback(
     (event: MapLayerMouseEvent) => {
       const buildingFeature = event.features?.find((feature) =>
-        String(feature.layer.id).endsWith("-extrusion") || String(feature.layer.id).endsWith("-outline"),
+        String(feature.layer.id).includes("-extrusion") ||
+        String(feature.layer.id).includes("-outline") ||
+        String(feature.layer.id).includes("-fill"),
       );
 
       if (buildingFeature && onBuildingClick) {
@@ -184,17 +202,27 @@ export function MapCanvas({
       if (!map) return;
 
       const hasTerrainSource = Boolean(map.getSource("terrain-dem"));
-      if (terrain3dEnabled && terrainAvailable && hasTerrainSource) {
-        map.setTerrain({ source: "terrain-dem", exaggeration: terrainExaggeration });
-        map.easeTo({ pitch: 55, duration: 350 });
+      const effectiveExaggeration = domMode ? 1 : terrainExaggeration;
+
+      const terrainShouldBeEnabled = terrain3dEnabled && terrainAvailable && hasTerrainSource;
+      if (terrainShouldBeEnabled) {
+        map.setTerrain({ source: "terrain-dem", exaggeration: effectiveExaggeration });
+        if (!previousTerrainEnabledRef.current && effectiveExaggeration > 0) {
+          map.easeTo({ pitch: 55, duration: 350 });
+        }
+        previousTerrainEnabledRef.current = true;
         return;
       }
+
       map.setTerrain(null);
-      map.easeTo({ pitch: 0, duration: 300 });
+      if (previousTerrainEnabledRef.current) {
+        map.easeTo({ pitch: 0, duration: 300 });
+      }
+      previousTerrainEnabledRef.current = false;
     }, 50);
 
     return () => window.clearTimeout(timer);
-  }, [terrain3dEnabled, terrainAvailable, terrainExaggeration, terrainRevision, mapStyle]);
+  }, [terrain3dEnabled, terrainAvailable, terrainExaggeration, domMode, terrainRevision, mapStyle]);
 
   return (
     <div className="relative h-full w-full">
@@ -207,27 +235,32 @@ export function MapCanvas({
         onClick={handleClick}
         interactiveLayerIds={interactiveLayerIds}
         onRotate={(event) => setBearing(event.target.getBearing())}
-        onLoad={() => setTerrainRevision((v) => v + 1)}
+        onLoad={() => {
+          setTerrainRevision((v) => v + 1);
+        }}
         onStyleData={() => setTerrainRevision((v) => v + 1)}
       >
         {terrainAvailable ? (
           <Source
+            key={`terrain-${terrainSource}`}
             id="terrain-dem"
             type="raster-dem"
-            tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png`]}
+            tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=${terrainSource}`]}
             tileSize={256}
             encoding="terrarium"
             maxzoom={15}
           >
-            <Layer
-              id="terrain-hillshade"
-              type="hillshade"
-              paint={{
-                "hillshade-exaggeration": hillshadeStrength,
-                "hillshade-shadow-color": "#0f172a",
-                "hillshade-highlight-color": "#e2e8f0",
-              }}
-            />
+            {!domMode && (
+              <Layer
+                id="terrain-hillshade"
+                type="hillshade"
+                paint={{
+                  "hillshade-exaggeration": hillshadeStrength,
+                  "hillshade-shadow-color": "#0f172a",
+                  "hillshade-highlight-color": "#e2e8f0",
+                }}
+              />
+            )}
           </Source>
         ) : null}
 
@@ -258,24 +291,89 @@ export function MapCanvas({
             const dashed = layer.style?.color_scale === "context";
 
             if (layer.style?.color_scale === "buildings3d") {
+              const buildingsUrl = `${apiBaseUrl}/api/vectors/${layer.id}`;
+              const modeSuffix = domMode ? "2d" : "3d";
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const extrusionHeightExpr: any = [
+                "coalesce",
+                [
+                  "max",
+                  1,
+                  [
+                    "-",
+                    ["coalesce", ["to-number", ["get", "roof_height"]], 0],
+                    ["coalesce", ["to-number", ["get", "ground_height"]], 0],
+                  ],
+                ],
+                ["max", 1, ["coalesce", ["to-number", ["get", "height"]], 6]],
+                6,
+              ];
+
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const selectedExtrusionHeightExpr: any = ["+", extrusionHeightExpr, 0.5];
+              
+              if (domMode) {
+                return (
+                  <Source key={`${layer.id}-${modeSuffix}`} id={layer.id} type="geojson" data={buildingsUrl}>
+                    <Layer
+                      id={`${layer.id}-fill-2d`}
+                      type="fill"
+                      paint={{
+                        "fill-color": color,
+                        "fill-opacity": Math.max(0.12, layer.default_opacity * 0.25),
+                      }}
+                    />
+                    <Layer
+                      id={`${layer.id}-outline-2d`}
+                      type="line"
+                      paint={{
+                        "line-color": "#d1d5db",
+                        "line-width": 0.8,
+                        "line-opacity": 0.9,
+                      }}
+                    />
+                    {selectedBuildingId ? (
+                      <Layer
+                        id={`${layer.id}-selected-fill`}
+                        type="fill"
+                        filter={["==", ["to-string", ["get", "id"]], selectedBuildingId]}
+                        paint={{
+                          "fill-color": "#fde047",
+                          "fill-opacity": 0.45,
+                        }}
+                      />
+                    ) : null}
+                    {selectedBuildingId ? (
+                      <Layer
+                        id={`${layer.id}-selected-outline`}
+                        type="line"
+                        filter={["==", ["to-string", ["get", "id"]], selectedBuildingId]}
+                        paint={{
+                          "line-color": "#fde047",
+                          "line-width": 3,
+                          "line-opacity": 1,
+                        }}
+                      />
+                    ) : null}
+                  </Source>
+                );
+              }
+
               return (
-                <Source key={layer.id} id={layer.id} type="geojson" data={`${apiBaseUrl}/api/vectors/${layer.id}`}>
+                <Source key={`${layer.id}-${modeSuffix}`} id={layer.id} type="geojson" data={buildingsUrl}>
                   <Layer
-                    id={`${layer.id}-extrusion`}
+                    id={`${layer.id}-extrusion-3d`}
                     type="fill-extrusion"
                     paint={{
                       "fill-extrusion-color": color,
-                      "fill-extrusion-height": [
-                        "*",
-                        1.5,
-                        ["coalesce", ["to-number", ["get", "height"]], 6],
-                      ],
-                      "fill-extrusion-base": ["coalesce", ["to-number", ["get", "min_height"]], 0],
+                      "fill-extrusion-height": extrusionHeightExpr,
+                      "fill-extrusion-base": 0,
                       "fill-extrusion-opacity": layer.default_opacity,
+                      "fill-extrusion-vertical-gradient": true,
                     }}
                   />
                   <Layer
-                    id={`${layer.id}-outline`}
+                    id={`${layer.id}-outline-3d`}
                     type="line"
                     paint={{
                       "line-color": "#d1d5db",
@@ -290,13 +388,10 @@ export function MapCanvas({
                       filter={["==", ["to-string", ["get", "id"]], selectedBuildingId]}
                       paint={{
                         "fill-extrusion-color": "#fde047",
-                        "fill-extrusion-height": [
-                          "*",
-                          1.52,
-                          ["coalesce", ["to-number", ["get", "height"]], 6],
-                        ],
-                        "fill-extrusion-base": ["coalesce", ["to-number", ["get", "min_height"]], 0],
+                        "fill-extrusion-height": selectedExtrusionHeightExpr,
+                        "fill-extrusion-base": 0,
                         "fill-extrusion-opacity": 1,
+                        "fill-extrusion-vertical-gradient": true,
                       }}
                     />
                   ) : null}
@@ -313,6 +408,108 @@ export function MapCanvas({
                       }}
                     />
                   ) : null}
+                </Source>
+              );
+            }
+
+            if (layer.style?.color_scale === "trees3d") {
+              const treeGreen = "#16a34a";
+              const treeGreenDark = "#15803d";
+              const trunkBrown = "#6b4f2a";
+              const modeSuffix = domMode ? "2d" : "3d";
+              
+              if (domMode) {
+                return (
+                  <Source
+                    key={`${layer.id}-${modeSuffix}`}
+                    id={layer.id}
+                    type="geojson"
+                    data={`${apiBaseUrl}/api/vectors/${layer.id}`}
+                  >
+                    <Layer
+                      id={`${layer.id}-halo`}
+                      type="circle"
+                      minzoom={11}
+                      filter={["==", ["get", "tree_part"], "point"]}
+                      paint={{
+                        "circle-color": treeGreen,
+                        "circle-opacity": 0.16,
+                        "circle-stroke-color": treeGreenDark,
+                        "circle-stroke-opacity": 0.28,
+                        "circle-stroke-width": 1,
+                        "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 4, 14, 7, 17, 11],
+                      }}
+                    />
+                    <Layer
+                      id={`${layer.id}-point`}
+                      type="circle"
+                      minzoom={11}
+                      filter={["==", ["get", "tree_part"], "point"]}
+                      paint={{
+                        "circle-color": treeGreenDark,
+                        "circle-opacity": layer.default_opacity,
+                        "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 1.1, 14, 1.8, 17, 2.7],
+                      }}
+                    />
+                  </Source>
+                );
+              }
+
+              return (
+                <Source
+                  key={`${layer.id}-${modeSuffix}`}
+                  id={layer.id}
+                  type="geojson"
+                  data={`${apiBaseUrl}/api/vectors/${layer.id}`}
+                >
+                  <Layer
+                    id={`${layer.id}-point-halo`}
+                    type="circle"
+                    maxzoom={13}
+                    filter={["==", ["get", "tree_part"], "point"]}
+                    paint={{
+                      "circle-color": treeGreen,
+                      "circle-opacity": 0.12,
+                      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3, 11, 5, 13, 7],
+                    }}
+                  />
+                  <Layer
+                    id={`${layer.id}-trunk`}
+                    type="fill-extrusion"
+                    minzoom={12}
+                    filter={["==", ["get", "tree_part"], "trunk"]}
+                    paint={{
+                      "fill-extrusion-color": trunkBrown,
+                      "fill-extrusion-height": ["coalesce", ["to-number", ["get", "trunk_height"]], 2.4],
+                      "fill-extrusion-base": 0,
+                      "fill-extrusion-opacity": Math.min(1, layer.default_opacity + 0.08),
+                      "fill-extrusion-vertical-gradient": true,
+                    }}
+                  />
+                  <Layer
+                    id={`${layer.id}-canopy`}
+                    type="fill-extrusion"
+                    minzoom={12}
+                    filter={["==", ["get", "tree_part"], "canopy"]}
+                    paint={{
+                      "fill-extrusion-color": treeGreen,
+                      "fill-extrusion-height": ["coalesce", ["to-number", ["get", "height"]], 12],
+                      "fill-extrusion-base": ["coalesce", ["to-number", ["get", "canopy_base"]], 1.5],
+                      "fill-extrusion-opacity": Math.max(0.7, layer.default_opacity * 0.88),
+                      "fill-extrusion-vertical-gradient": true,
+                    }}
+                  />
+                  <Layer
+                    id={`${layer.id}-canopy-outline`}
+                    type="line"
+                    minzoom={12}
+                    filter={["==", ["get", "tree_part"], "canopy"]}
+                    paint={{
+                      "line-color": treeGreenDark,
+                      "line-width": 0.45,
+                      "line-opacity": 0.45,
+                    }}
+                  />
                 </Source>
               );
             }

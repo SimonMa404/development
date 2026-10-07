@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metalink xmlns="urn:ietf:params:xml:ns:metalink">
+  <generator>BVV-MetaLinker</generator>
+  <published>2026-09-30T02:09:30Z</published>
+  <file name="32680_5330_20_DOM.tif">
+    <size>45305155</size>
+    <hash type="sha-256">96efdc97a407c7ec95bb5726a1ba32b6edf269472dd39678a1510ae377da66bd</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32680_5330_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32680_5330_20_DOM.tif</url>
+  </file>
+  <file name="32678_5330_20_DOM.tif">
+    <size>43797184</size>
+    <hash type="sha-256">4f5c38b2a173f908e9a43eb0a798cd9cbc4b361aa32e668f42863e186bf21959</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32678_5330_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32678_5330_20_DOM.tif</url>
+  </file>
+  <file name="32678_5332_20_DOM.tif">
+    <size>41826207</size>
+    <hash type="sha-256">4d08bf66585fc5c2a9b355d4844d2707f1d0ae0b6b3b919838e4565f60910a9a</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32678_5332_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32678_5332_20_DOM.tif</url>
+  </file>
+  <file name="32679_5331_20_DOM.tif">
+    <size>53257676</size>
+    <hash type="sha-256">58cb9d3f7c5153c71120c3b6d71d76ce0f777155c8aed061a0e6abec592b7ecc</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32679_5331_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32679_5331_20_DOM.tif</url>
+  </file>
+  <file name="32681_5330_20_DOM.tif">
+    <size>34753580</size>
+    <hash type="sha-256">638c667afd5bd8baf0c72baf59d724a1527a16b2284acc70323e380e467abb67</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32681_5330_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32681_5330_20_DOM.tif</url>
+  </file>
+  <file name="32682_5332_20_DOM.tif">
+    <size>44230366</size>
+    <hash type="sha-256">f73dda8367c211669f8ff4144076ef1e6a356ae74c46bea4a7a4cd17525bf71d</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32682_5332_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32682_5332_20_DOM.tif</url>
+  </file>
+  <file name="32683_5330_20_DOM.tif">
+    <size>51535860</size>
+    <hash type="sha-256">59c75ef657e335641398854eabb49006ec3013a9356dab9702e792bcbd33a169</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32683_5330_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32683_5330_20_DOM.tif</url>
+  </file>
+  <file name="32679_5328_20_DOM.tif">
+    <size>53606145</size>
+    <hash type="sha-256">6d58f1a3961853f1ccdfa04b18eec9ea1160527976682d81ec06522ce9c3260d</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32679_5328_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32679_5328_20_DOM.tif</url>
+  </file>
+  <file name="32677_5332_20_DOM.tif">
+    <size>46848571</size>
+    <hash type="sha-256">4758a4c1e16cff14723d8d207715f5578526b81471788b10f5748f0773f2c25c</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32677_5332_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32677_5332_20_DOM.tif</url>
+  </file>
+  <file name="32680_5329_20_DOM.tif">
+    <size>45756313</size>
+    <hash type="sha-256">904f98c04c03ce2680d187a0d019564917dad85e5bc92710b5564901341d12cb</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32680_5329_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32680_5329_20_DOM.tif</url>
+  </file>
+  <file name="32677_5331_20_DOM.tif">
+    <size>53186095</size>
+    <hash type="sha-256">6017e593f7b49d1f23dc2159e89a123ce21a8a9350376a48d7d3d98464ec70d8</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32677_5331_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32677_5331_20_DOM.tif</url>
+  </file>
+  <file name="32680_5327_20_DOM.tif">
+    <size>54029274</size>
+    <hash type="sha-256">1e30152d86ab6cd6a24d8ed2aae87f6334ab958871842f1834f1e5fbf4521067</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32680_5327_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32680_5327_20_DOM.tif</url>
+  </file>
+  <file name="32681_5328_20_DOM.tif">
+    <size>53314878</size>
+    <hash type="sha-256">ab1e45abfb33088c9478d775d3fc9dac4eb10bab35b0ad1944d3f5d8a0729ed3</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32681_5328_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32681_5328_20_DOM.tif</url>
+  </file>
+  <file name="32683_5329_20_DOM.tif">
+    <size>46946936</size>
+    <hash type="sha-256">1ce9118017265733b32fca4e0126ad3ac19e593e81b33f5cd53e75b84ee1796f</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32683_5329_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32683_5329_20_DOM.tif</url>
+  </file>
+  <file name="32683_5331_20_DOM.tif">
+    <size>42768426</size>
+    <hash type="sha-256">b87725c020dba136614a2bf35a69a06542311e8b2571176f53a51632c5bebb88</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32683_5331_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32683_5331_20_DOM.tif</url>
+  </file>
+  <file name="32680_5328_20_DOM.tif">
+    <size>55363308</size>
+    <hash type="sha-256">56df30576726b77b0831a2444d0e5350b154c9fee890b6b402f2be45769c3add</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32680_5328_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32680_5328_20_DOM.tif</url>
+  </file>
+  <file name="32681_5329_20_DOM.tif">
+    <size>43232919</size>
+    <hash type="sha-256">999d09d7303927cca741a044f366eebee27ff6d6d4619ef6f6f769d118a7ef73</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32681_5329_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32681_5329_20_DOM.tif</url>
+  </file>
+  <file name="32681_5331_20_DOM.tif">
+    <size>39265262</size>
+    <hash type="sha-256">d2ede345caa99c42594fa53f9185073c5ef541806ce11ea93c955f286fdf8f47</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32681_5331_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32681_5331_20_DOM.tif</url>
+  </file>
+  <file name="32682_5331_20_DOM.tif">
+    <size>41295901</size>
+    <hash type="sha-256">9ddf2d34b33f05c11af56e41e079550ca21205d7d19cc5915be93d235f9d619d</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32682_5331_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32682_5331_20_DOM.tif</url>
+  </file>
+  <file name="32680_5331_20_DOM.tif">
+    <size>47616992</size>
+    <hash type="sha-256">a766bae2e264af0f9bfed638bdc577b4c1a1c117d5e712e7dd63f30046544797</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32680_5331_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32680_5331_20_DOM.tif</url>
+  </file>
+  <file name="32682_5329_20_DOM.tif">
+    <size>52219285</size>
+    <hash type="sha-256">8e7fe7ef3080d49164b64b8b2b6af67569859c0b10a809ab483f09fc3dbed742</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32682_5329_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32682_5329_20_DOM.tif</url>
+  </file>
+  <file name="32679_5330_20_DOM.tif">
+    <size>51044789</size>
+    <hash type="sha-256">7b7a164fae3df11a4e868c42b5ca63d5e91843911186592c72dc8f0648698fb7</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32679_5330_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32679_5330_20_DOM.tif</url>
+  </file>
+  <file name="32678_5331_20_DOM.tif">
+    <size>52665106</size>
+    <hash type="sha-256">bf6a023d6a13ffaf33156d5de3c2eb5f305b6da2850b0ee30b68f7621b191cca</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32678_5331_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32678_5331_20_DOM.tif</url>
+  </file>
+  <file name="32679_5327_20_DOM.tif">
+    <size>53206833</size>
+    <hash type="sha-256">aca9d12ee8f7ac59b65329511099fd38bac58c4ea0adb7228ecd317f17cb042f</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32679_5327_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32679_5327_20_DOM.tif</url>
+  </file>
+  <file name="32682_5330_20_DOM.tif">
+    <size>49697480</size>
+    <hash type="sha-256">c25c18f8e7cd5fbca80c58763fc4a20e83614c265eb42728d3ba6b1c5b0e33dd</hash>
+    <url>https://download1.bayernwolke.de/a/dom20/DOM/32682_5330_20_DOM.tif</url>
+    <url>https://download2.bayernwolke.de/a/dom20/DOM/32682_5330_20_DOM.tif</url>
+  </file>
+</metalink>

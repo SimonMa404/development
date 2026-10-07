@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
-import { MapCanvas, type BasemapId } from "@/components/map/MapCanvas";
+import { MapCanvas, type BasemapId, type TerrainSourceId } from "@/components/map/MapCanvas";
 import { MapLegend } from "@/components/map/MapLegend";
 import { BasemapSwitcher } from "@/components/map/BasemapSwitcher";
 import { LayerPanel } from "@/components/layers/LayerPanel";
@@ -12,13 +12,14 @@ import { AnalysisPanel } from "@/components/analysis/AnalysisPanel";
 import { CollapsiblePanel } from "@/components/layout/CollapsiblePanel";
 import { useLayerCatalog } from "@/hooks/useLayerCatalog";
 import { useAreaStatistics } from "@/hooks/useAreaStatistics";
-import { fetchAreaStatistics, fetchBuildingContext, fetchBuildingsOverview, fetchHeatVulnerability } from "@/lib/api/analysis";
+import { fetchAreaStatistics, fetchBuildingContext, fetchBuildingsOverview, fetchHeatVulnerability, fetchTreeStatistics } from "@/lib/api/analysis";
 import { API_BASE_URL, fetchJson } from "@/lib/api/client";
 import type {
   BuildingContextResponse,
   BuildingOverviewLayerStatistics,
   HeatVulnerabilityResult,
   LayerAreaStatistics,
+  TreeStatisticsResult,
 } from "@/types/analysis";
 import type { CatalogLayer } from "@/types/layers";
 
@@ -36,7 +37,9 @@ export default function HomePage() {
   const [drawnPoints, setDrawnPoints] = useState<[number, number][]>([]);
   const [basemap, setBasemap] = useState<BasemapId>("satellite");
   const [terrain3dEnabled, setTerrain3dEnabled] = useState(false);
+  const [terrainSource, setTerrainSource] = useState<TerrainSourceId>("dem");
   const [terrainAvailable, setTerrainAvailable] = useState(false);
+  const [terrainSourcesAvailable, setTerrainSourcesAvailable] = useState<Record<TerrainSourceId, boolean>>({ dem: false, dom: false });
   const [terrainExaggeration, setTerrainExaggeration] = useState(1.8);
   const [hillshadeStrength, setHillshadeStrength] = useState(0.7);
   const [layersPanelOpen, setLayersPanelOpen] = useState(true);
@@ -51,6 +54,8 @@ export default function HomePage() {
   const [overviewBuildingStats, setOverviewBuildingStats] = useState<{ count: number; averageHeight: number } | null>(null);
   const [overviewBuildingClimate, setOverviewBuildingClimate] = useState<BuildingOverviewLayerStatistics[]>([]);
   const [overviewVulnerability, setOverviewVulnerability] = useState<HeatVulnerabilityResult | null>(null);
+  const [overviewTreeStats, setOverviewTreeStats] = useState<TreeStatisticsResult | null>(null);
+  const domTerrainMode = terrain3dEnabled && terrainSource === "dom";
 
   const areaStatistics = useAreaStatistics();
   const buildingContext = useMutation<BuildingContextResponse, Error, { geometry: Record<string, unknown>; layer_ids: string[] }>(
@@ -79,40 +84,87 @@ export default function HomePage() {
       return response.result;
     },
   });
+  const treeStatistics = useMutation<TreeStatisticsResult, Error, { geometry: { type: "Polygon"; coordinates: number[][][] } }>({
+    mutationFn: async (payload) => {
+      const response = await fetchTreeStatistics({
+        geometry: payload.geometry,
+        layer_id: "trees-3d-planegg",
+      });
+      return response.result;
+    },
+  });
 
   const layers = useMemo(() => {
     if (!catalogLayers) return [];
     return catalogLayers.map((layer) => ({ ...layer, ...overrides[layer.id] }));
   }, [catalogLayers, overrides]);
 
+  const availableCatalogLayers = useMemo(() => (catalogLayers ?? []).filter((layer) => layer.available), [catalogLayers]);
+
   const inspectableRasterLayers = useMemo(
     () => layers.filter((layer) => layer.layer_type === "raster" && layer.default_visible && layer.available),
     [layers],
+  );
+
+  const overviewLayerIds = useMemo(
+    () =>
+      availableCatalogLayers
+        .filter((layer) => layer.layer_type === "raster" && layer.inspectable)
+        .map((layer) => layer.id),
+    [availableCatalogLayers],
   );
 
   const legendLayers = useMemo(
     () =>
       layers
         .filter((layer) => layer.default_visible && layer.available)
+        .filter((layer) => !(layer.value_type === "rgb" || layer.style?.color_scale === "rgb"))
         .filter((layer) => layer.layer_type === "raster" || (layer.layer_type === "vector" && layer.style?.color_scale === "population")),
     [layers],
   );
 
-  const overviewLayerIds = useMemo(() => inspectableRasterLayers.map((layer) => layer.id), [inspectableRasterLayers]);
   const censusVisible = useMemo(
     () => layers.some((layer) => layer.id === "census-2022-100m-planegg" && layer.default_visible && layer.available),
     [layers],
+  );
+  const censusAvailable = useMemo(
+    () => availableCatalogLayers.some((layer) => layer.id === "census-2022-100m-planegg"),
+    [availableCatalogLayers],
   );
   const lstVisible = useMemo(
     () => layers.some((layer) => layer.id === "lst-planegg" && layer.default_visible && layer.available),
     [layers],
   );
+  const lstAvailable = useMemo(
+    () => availableCatalogLayers.some((layer) => layer.id === "lst-planegg"),
+    [availableCatalogLayers],
+  );
   const ndviVisible = useMemo(
     () => layers.some((layer) => layer.id === "ndvi-planegg" && layer.default_visible && layer.available),
     [layers],
   );
+  const ndviAvailable = useMemo(
+    () => availableCatalogLayers.some((layer) => layer.id === "ndvi-planegg"),
+    [availableCatalogLayers],
+  );
   const buildingsVisible = useMemo(
     () => layers.some((layer) => layer.id === "buildings-3d-planegg" && layer.default_visible && layer.available),
+    [layers],
+  );
+  const buildingsAvailable = useMemo(
+    () => availableCatalogLayers.some((layer) => layer.id === "buildings-3d-planegg"),
+    [availableCatalogLayers],
+  );
+  const treesAvailable = useMemo(
+    () => availableCatalogLayers.some((layer) => layer.id === "trees-3d-planegg"),
+    [availableCatalogLayers],
+  );
+
+  const visibleRasterLayerIds = useMemo(
+    () =>
+      layers
+        .filter((layer) => layer.layer_type === "raster" && layer.default_visible && layer.available)
+        .map((layer) => layer.id),
     [layers],
   );
 
@@ -148,11 +200,12 @@ export default function HomePage() {
     let active = true;
 
     async function loadOverview() {
-      if (overviewLayerIds.length === 0 && !censusVisible) {
+      if (overviewLayerIds.length === 0 && !censusAvailable && !treesAvailable && !buildingsAvailable) {
         if (!active) return;
         setOverviewResults([]);
         setOverviewBuildingStats(null);
         setOverviewVulnerability(null);
+        setOverviewTreeStats(null);
         setOverviewPending(false);
         return;
       }
@@ -175,20 +228,29 @@ export default function HomePage() {
             })
           : { results: [] };
 
-        const vulnerability = censusVisible
+        const vulnerability = censusAvailable
           ? await fetchHeatVulnerability({
               geometry: boundary,
               census_layer_id: "census-2022-100m-planegg",
-              lst_layer_id: lstVisible ? "lst-planegg" : null,
-              ndvi_layer_id: ndviVisible ? "ndvi-planegg" : null,
+              lst_layer_id: lstAvailable ? "lst-planegg" : null,
+              ndvi_layer_id: ndviAvailable ? "ndvi-planegg" : null,
+            })
+          : null;
+
+        const treeStats = treesAvailable
+          ? await fetchTreeStatistics({
+              geometry: boundary,
+              layer_id: "trees-3d-planegg",
             })
           : null;
 
         const buildingsOverviewIds = overviewLayerIds.filter((id) => id === "ndvi-planegg" || id === "lst-planegg");
-        const buildingsOverview = await fetchBuildingsOverview({
-          layer_ids: buildingsOverviewIds,
-          buildings_layer_id: "buildings-3d-planegg",
-        });
+        const buildingsOverview = buildingsAvailable
+          ? await fetchBuildingsOverview({
+              layer_ids: buildingsOverviewIds,
+              buildings_layer_id: "buildings-3d-planegg",
+            })
+          : { results: [] };
 
         const heights = buildingsFc.features
           .map((feature) => Number(feature.properties?.height))
@@ -197,11 +259,16 @@ export default function HomePage() {
         if (!active) return;
         setOverviewResults(stats.results);
         setOverviewVulnerability(vulnerability?.result ?? null);
+        setOverviewTreeStats(treeStats?.result ?? null);
         setOverviewBuildingClimate(buildingsOverview.results);
-        setOverviewBuildingStats({
-          count: buildingsFc.features.length,
-          averageHeight: heights.length > 0 ? heights.reduce((sum, h) => sum + h, 0) / heights.length : 0,
-        });
+        setOverviewBuildingStats(
+          buildingsAvailable
+            ? {
+                count: buildingsFc.features.length,
+                averageHeight: heights.length > 0 ? heights.reduce((sum, h) => sum + h, 0) / heights.length : 0,
+              }
+            : null,
+        );
       } catch (err) {
         if (!active) return;
         setOverviewError(err instanceof Error ? err : new Error("Failed to load area overview"));
@@ -214,21 +281,37 @@ export default function HomePage() {
     return () => {
       active = false;
     };
-  }, [overviewLayerIds, censusVisible, lstVisible, ndviVisible]);
+  }, [overviewLayerIds, censusAvailable, lstAvailable, ndviAvailable, treesAvailable, buildingsAvailable]);
 
   useEffect(() => {
     let active = true;
-    fetchJson<{ available: boolean }>("/api/terrain/status")
+    fetchJson<{ available: boolean; sources?: Partial<Record<TerrainSourceId, boolean>> }>(`/api/terrain/status?source=${terrainSource}`)
       .then((payload) => {
-        if (active) setTerrainAvailable(Boolean(payload.available));
+        if (!active) return;
+        setTerrainAvailable(Boolean(payload.available));
+        setTerrainSourcesAvailable({
+          dem: Boolean(payload.sources?.dem),
+          dom: Boolean(payload.sources?.dom),
+        });
       })
       .catch(() => {
-        if (active) setTerrainAvailable(false);
+        if (!active) return;
+        setTerrainAvailable(false);
+        setTerrainSourcesAvailable({ dem: false, dom: false });
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [terrainSource]);
+
+  useEffect(() => {
+    if (terrainSource === "dem" && !terrainSourcesAvailable.dem && terrainSourcesAvailable.dom) {
+      setTerrainSource("dom");
+    }
+    if (terrainSource === "dom" && !terrainSourcesAvailable.dom && terrainSourcesAvailable.dem) {
+      setTerrainSource("dem");
+    }
+  }, [terrainSource, terrainSourcesAvailable]);
 
   function handleToggleVisibility(id: string) {
     setOverrides((prev) => {
@@ -264,6 +347,11 @@ export default function HomePage() {
     } else {
       heatVulnerability.reset();
     }
+    if (treesAvailable) {
+      treeStatistics.mutate({ geometry: polygon });
+    } else {
+      treeStatistics.reset();
+    }
     setHasDrawnSelection(true);
     setAnalysisView("drawn");
     setDrawMode(false);
@@ -274,6 +362,7 @@ export default function HomePage() {
     setDrawnPoints([]);
     areaStatistics.reset();
     heatVulnerability.reset();
+    treeStatistics.reset();
     setHasDrawnSelection(false);
     setAnalysisView("planegg");
   }
@@ -300,6 +389,9 @@ export default function HomePage() {
   const vulnerabilityResult = useDrawnView ? (heatVulnerability.data ?? null) : overviewVulnerability;
   const vulnerabilityPending = useDrawnView ? heatVulnerability.isPending : overviewPending;
   const vulnerabilityError = useDrawnView ? heatVulnerability.error : null;
+  const treeStatsResult = useDrawnView ? (treeStatistics.data ?? null) : overviewTreeStats;
+  const treeStatsPending = useDrawnView ? treeStatistics.isPending : overviewPending;
+  const treeStatsError = useDrawnView ? treeStatistics.error : null;
 
   if (isLoading) {
     return (
@@ -329,30 +421,41 @@ export default function HomePage() {
             type="button"
             role="switch"
             aria-checked={terrain3dEnabled}
-            disabled={!terrainAvailable}
+            disabled={!terrainSourcesAvailable.dem && !terrainSourcesAvailable.dom}
             onClick={() => setTerrain3dEnabled((v) => !v)}
             className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition ${
-              terrainAvailable
+              terrainSourcesAvailable.dem || terrainSourcesAvailable.dom
                 ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/15"
                 : "cursor-not-allowed border-white/10 bg-white/5 text-slate-500"
             }`}
-            title={terrainAvailable ? "Toggle 3D terrain mode" : "DEM not available. Run DEM import script first."}
+            title={(terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? "Toggle 3D terrain mode" : "No terrain source available. Import DEM/DOM first."}
           >
             <span
               className={`relative h-4 w-8 shrink-0 rounded-full transition ${
-                terrain3dEnabled && terrainAvailable ? "bg-cyan-400" : "bg-slate-700"
+                terrain3dEnabled && (terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? "bg-cyan-400" : "bg-slate-700"
               }`}
             >
               <span
                 className={`absolute top-0.5 h-3 w-3 rounded-full bg-slate-950 transition ${
-                  terrain3dEnabled && terrainAvailable ? "left-4" : "left-0.5"
+                  terrain3dEnabled && (terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? "left-4" : "left-0.5"
                 }`}
               />
             </span>
             3D Terrain
           </button>
-          {terrain3dEnabled && terrainAvailable ? (
+          {terrain3dEnabled && (terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? (
             <div className="hidden items-center gap-3 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 sm:flex">
+              <label className="flex items-center gap-2 text-[11px] text-slate-300">
+                Model
+                <select
+                  value={terrainSource}
+                  onChange={(event) => setTerrainSource(event.target.value as TerrainSourceId)}
+                  className="rounded border border-white/10 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-200"
+                >
+                  <option value="dem" disabled={!terrainSourcesAvailable.dem}>DEM</option>
+                  <option value="dom" disabled={!terrainSourcesAvailable.dom}>DOM</option>
+                </select>
+              </label>
               <label className="flex items-center gap-2 text-[11px] text-slate-300">
                 Z-factor
                 <input
@@ -360,11 +463,12 @@ export default function HomePage() {
                   min={1}
                   max={3}
                   step={0.1}
-                  value={terrainExaggeration}
+                  value={domTerrainMode ? 1 : terrainExaggeration}
                   onChange={(event) => setTerrainExaggeration(Number(event.target.value))}
+                  disabled={domTerrainMode}
                   className="w-20 accent-cyan-400"
                 />
-                <span className="w-8 text-right text-cyan-300">{terrainExaggeration.toFixed(1)}x</span>
+                <span className="w-8 text-right text-cyan-300">{(domTerrainMode ? 1 : terrainExaggeration).toFixed(1)}x</span>
               </label>
               <label className="flex items-center gap-2 text-[11px] text-slate-300">
                 Hillshade
@@ -373,8 +477,9 @@ export default function HomePage() {
                   min={0.2}
                   max={1.4}
                   step={0.1}
-                  value={hillshadeStrength}
+                  value={domTerrainMode ? 0 : hillshadeStrength}
                   onChange={(event) => setHillshadeStrength(Number(event.target.value))}
+                  disabled={domTerrainMode}
                   className="w-20 accent-cyan-400"
                 />
               </label>
@@ -395,9 +500,10 @@ export default function HomePage() {
             onBuildingClick={handleBuildingClick}
             basemap={basemap}
             terrain3dEnabled={terrain3dEnabled}
+            terrainSource={terrainSource}
             terrainAvailable={terrainAvailable}
-            terrainExaggeration={terrainExaggeration}
-            hillshadeStrength={hillshadeStrength}
+            terrainExaggeration={domTerrainMode ? 1 : terrainExaggeration}
+            hillshadeStrength={domTerrainMode ? 0 : hillshadeStrength}
             selectedBuildingId={selectedBuilding?.id ?? null}
           />
 
@@ -603,6 +709,9 @@ export default function HomePage() {
                 results={analysisResults}
                 isPending={analysisPending}
                 error={analysisError}
+                treeStats={treeStatsResult}
+                treeStatsPending={treeStatsPending}
+                treeStatsError={treeStatsError}
                 overviewMode={!useDrawnView}
                 overviewBuildingStats={overviewBuildingStats}
                 overviewBuildingClimate={overviewBuildingClimate}
@@ -611,8 +720,10 @@ export default function HomePage() {
                 vulnerabilityError={vulnerabilityError}
                 lstPalette={lstPalette}
                 ndviPalette={ndviPalette}
-                showBuildings={buildingsVisible}
-                showVulnerability={censusVisible}
+                showBuildings={useDrawnView ? buildingsVisible : buildingsAvailable}
+                showVulnerability={useDrawnView ? censusVisible : censusAvailable}
+                showTrees={useDrawnView ? treesAvailable : treesAvailable}
+                visibleLayerIds={visibleRasterLayerIds}
               />
             </div>
           ) : null}

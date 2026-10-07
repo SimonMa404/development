@@ -12,6 +12,8 @@ from app.schemas.analysis import (
     BuildingOverviewResponse,
     HeatVulnerabilityRequest,
     HeatVulnerabilityResponse,
+    TreeStatisticsRequest,
+    TreeStatisticsResponse,
 )
 from app.services.catalog_service import CatalogService
 from app.services.statistics_service import StatisticsService
@@ -29,6 +31,18 @@ def area_statistics(payload: AreaStatisticsRequest) -> AreaStatisticsResponse:
     except LayerUnavailableError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AreaStatisticsResponse(results=results)
+
+
+@router.post("/analysis/tree-statistics", response_model=TreeStatisticsResponse)
+def tree_statistics(payload: TreeStatisticsRequest) -> TreeStatisticsResponse:
+    service = StatisticsService(CatalogService())
+    try:
+        result = service.tree_statistics(payload.geometry, payload.layer_id)
+    except LayerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LayerUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return TreeStatisticsResponse(result=result)
 
 
 @router.post("/analysis/building-context", response_model=BuildingContextResponse)

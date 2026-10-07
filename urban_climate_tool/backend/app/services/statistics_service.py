@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from functools import lru_cache
 
@@ -13,6 +14,7 @@ from shapely.geometry import box, shape
 from app.core.config import settings
 from app.core.errors import LayerUnavailableError
 from app.repositories.local_raster import LocalRasterRepository
+from app.repositories.local_vector import LocalVectorRepository
 from app.services.catalog_service import CatalogService
 
 _EMPTY_STATS: dict[str, float | int] = {
@@ -105,6 +107,84 @@ class StatisticsService:
     def __init__(self, catalog_service: CatalogService | None = None):
         self.catalog_service = catalog_service or CatalogService()
         self.repository = LocalRasterRepository(settings.data_root_path)
+        self.vector_repository = LocalVectorRepository(settings.data_root_path)
+
+    def tree_statistics(self, geometry: dict[str, Any], layer_id: str = "trees-3d-planegg") -> dict[str, Any]:
+        layer = self.catalog_service.get_by_id(layer_id)
+        if layer.layer_type != "vector":
+            raise LayerUnavailableError(f"Layer '{layer_id}' is not a vector layer.")
+
+        layer_path = settings.data_root_path / layer.relative_path
+        if not layer_path.exists():
+            raise LayerUnavailableError(f"Tree layer file not found: {layer.relative_path}")
+
+        selected_geom_4326 = shape(geometry)
+        selected_geom_25832 = gpd.GeoSeries([selected_geom_4326], crs="EPSG:4326").to_crs(epsg=25832).iloc[0]
+        area_hectares = float(selected_geom_25832.area / 10000) if not selected_geom_25832.is_empty else 0.0
+
+        query_bounds_4326 = list(selected_geom_4326.bounds)
+        stats_relative_path = layer.relative_path
+        sibling_parquet = Path(layer.relative_path).with_suffix(".parquet")
+        if (settings.data_root_path / sibling_parquet).exists():
+            stats_relative_path = sibling_parquet.as_posix()
+
+        trees_gdf = self.vector_repository.read_frame(stats_relative_path, bbox=query_bounds_4326)
+        if trees_gdf.empty:
+            return {
+                "layer_id": layer_id,
+                "title": layer.title,
+                "tree_count": 0,
+                "area_hectares": area_hectares,
+                "tree_density_per_hectare": 0.0 if area_hectares > 0 else None,
+                "mean_height": None,
+                "median_height": None,
+                "maximum_height": None,
+                "minimum_height": None,
+                "mean_ground_elevation": None,
+            }
+
+        if trees_gdf.crs is None:
+            trees_gdf = trees_gdf.set_crs("EPSG:4326")
+
+        trees_25832 = trees_gdf.to_crs(epsg=25832) if trees_gdf.crs != "EPSG:25832" else trees_gdf.copy()
+        minx, miny, maxx, maxy = selected_geom_25832.bounds
+        candidates = trees_25832.cx[minx:maxx, miny:maxy].copy()
+
+        if candidates.empty:
+            return {
+                "layer_id": layer_id,
+                "title": layer.title,
+                "tree_count": 0,
+                "area_hectares": area_hectares,
+                "tree_density_per_hectare": 0.0 if area_hectares > 0 else None,
+                "mean_height": None,
+                "median_height": None,
+                "maximum_height": None,
+                "minimum_height": None,
+                "mean_ground_elevation": None,
+            }
+
+        centroid_mask = candidates.geometry.centroid.apply(selected_geom_25832.covers)
+        selected = candidates.loc[centroid_mask].copy()
+
+        heights = _numeric_series(selected, "height")
+        base_heights = _numeric_series(selected, "base_height")
+        valid_heights = heights.dropna()
+        valid_base_heights = base_heights.dropna()
+        tree_count = int(len(selected))
+
+        return {
+            "layer_id": layer_id,
+            "title": layer.title,
+            "tree_count": tree_count,
+            "area_hectares": area_hectares,
+            "tree_density_per_hectare": float(tree_count / area_hectares) if area_hectares > 0 else None,
+            "mean_height": float(valid_heights.mean()) if not valid_heights.empty else None,
+            "median_height": float(valid_heights.median()) if not valid_heights.empty else None,
+            "maximum_height": float(valid_heights.max()) if not valid_heights.empty else None,
+            "minimum_height": float(valid_heights.min()) if not valid_heights.empty else None,
+            "mean_ground_elevation": float(valid_base_heights.mean()) if not valid_base_heights.empty else None,
+        }
 
     def area_statistics(self, geometry: dict[str, Any], layer_ids: list[str]) -> list[dict[str, Any]]:
         """Compute per-layer statistics for a user-drawn polygon plus a
@@ -466,7 +546,6 @@ class StatisticsService:
         geom_series = buildings_gdf.geometry
         unioned = geom_series.union_all() if hasattr(geom_series, "union_all") else geom_series.unary_union
         return unioned.__geo_interface__
-
 
 def _sum_nullable(values: pd.Series) -> float | None:
     if values.empty:

@@ -8,6 +8,12 @@
 docker compose up --build -d
 ```
 
+Offline startup (after first online build):
+
+```bash
+docker compose up -d --no-build
+```
+
 App URLs:
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:8000`
@@ -140,6 +146,26 @@ docker compose up --build
 
 This mounts `./storage` into the backend container so runtime data is persisted locally without being committed.
 
+## Running Docker offline
+
+You can run the stack without internet access if images are already built locally.
+
+One-time preparation while online:
+
+```bash
+docker compose build
+```
+
+Then start offline:
+
+```bash
+docker compose up -d --no-build
+```
+
+Notes:
+- Do not use `--build` when offline.
+- Avoid pruning local images if you want to keep offline capability.
+
 ## Adding a real GeoTIFF
 
 A concrete workflow:
@@ -168,6 +194,34 @@ This script:
 - writes `storage/rasters/processed/planegg/dem_1m.tif`.
 
 Once this file exists, the frontend enables the `3D Terrain` switch automatically.
+
+## Importing DOM and RGB 20cm rasters from .meta4
+
+For additional high-resolution rasters, use the new reusable importer:
+
+```bash
+python scripts/import_raster_from_meta4.py \
+	--meta4 "data/09184138 (4).meta4" \
+	--raw-subdir dom_20cm \
+	--output storage/rasters/processed/planegg/dom_20cm.tif
+
+python scripts/import_raster_from_meta4.py \
+	--meta4 "data/09184138_RGB20cm.meta4" \
+	--raw-subdir rgb_20cm \
+	--output storage/rasters/processed/planegg/rgb_20cm.tif
+```
+
+Convenience wrappers are also available:
+
+```bash
+python scripts/fetch_dom_from_meta4.py --meta4 "data/09184138 (4).meta4"
+python scripts/fetch_rgb_from_meta4.py --meta4 "data/09184138_RGB20cm.meta4"
+```
+
+UI behavior after import:
+- `3D Terrain` now supports a model selector (`DEM` / `DOM`).
+- In `DOM` mode, buildings and trees are shown as 2D overlays (no 3D extrusions).
+- The RGB 20cm orthophoto layer is available in the layer list and intentionally hidden from the legend.
 
 ## Adding a real vector dataset
 

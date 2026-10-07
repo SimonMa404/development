@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
@@ -18,3 +19,9 @@ class VectorService:
         if layer.layer_type != "vector":
             raise LayerUnavailableError(f"Layer '{layer_id}' is not a vector layer.")
         return self.repository.read_geojson(layer.relative_path, bbox=bbox)
+
+    def get_vector_path(self, layer_id: str) -> Path:
+        layer = self.catalog_service.get_by_id(layer_id)
+        if layer.layer_type != "vector":
+            raise LayerUnavailableError(f"Layer '{layer_id}' is not a vector layer.")
+        return self.repository.vector_path(layer.relative_path)

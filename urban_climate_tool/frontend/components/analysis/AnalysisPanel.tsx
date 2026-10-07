@@ -7,6 +7,7 @@ import type {
   HeatVulnerabilityResult,
   Histogram,
   LayerAreaStatistics,
+  TreeStatisticsResult,
 } from "@/types/analysis";
 
 type ThresholdClass = {
@@ -480,6 +481,9 @@ export function AnalysisPanel({
   results,
   isPending,
   error,
+  treeStats = null,
+  treeStatsPending = false,
+  treeStatsError = null,
   overviewMode = false,
   overviewBuildingStats = null,
   overviewBuildingClimate = [],
@@ -490,10 +494,15 @@ export function AnalysisPanel({
   ndviPalette = ["#8B4513", "#d73027", "#fee08b", "#ffffbf", "#a6d96a", "#1a9850", "#00441b"],
   showBuildings = true,
   showVulnerability = true,
+  showTrees = true,
+  visibleLayerIds = [],
 }: {
   results: LayerAreaStatistics[] | undefined;
   isPending: boolean;
   error: Error | null;
+  treeStats?: TreeStatisticsResult | null;
+  treeStatsPending?: boolean;
+  treeStatsError?: Error | null;
   overviewMode?: boolean;
   overviewBuildingStats?: { count: number; averageHeight: number } | null;
   overviewBuildingClimate?: BuildingOverviewLayerStatistics[];
@@ -504,6 +513,8 @@ export function AnalysisPanel({
   ndviPalette?: string[];
   showBuildings?: boolean;
   showVulnerability?: boolean;
+  showTrees?: boolean;
+  visibleLayerIds?: string[];
 }) {
   const hasRasterResults = Boolean(results && results.length > 0);
 
@@ -525,6 +536,44 @@ export function AnalysisPanel({
 
   return (
     <div className="space-y-4">
+      {showTrees ? (
+        <div className="glass-panel rounded-xl border border-white/10 p-3">
+          <div className="mb-2 text-sm font-medium text-slate-100">Trees</div>
+          {treeStatsPending ? <div className="text-[11px] text-slate-500">Computing tree statistics…</div> : null}
+          {treeStatsError ? <div className="text-[11px] text-red-300">{treeStatsError.message}</div> : null}
+          {treeStats ? (
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="rounded border border-white/10 bg-white/[0.02] p-2">
+                <div className="text-slate-400">Tree count</div>
+                <div className="text-base font-semibold text-emerald-300">{treeStats.tree_count.toLocaleString()}</div>
+              </div>
+              <div className="rounded border border-white/10 bg-white/[0.02] p-2">
+                <div className="text-slate-400">Density</div>
+                <div className="text-base font-semibold text-emerald-300">
+                  {(treeStats.tree_density_per_hectare ?? 0).toFixed(1)} /ha
+                </div>
+              </div>
+              <div className="rounded border border-white/10 bg-white/[0.02] p-2">
+                <div className="text-slate-400">Average height</div>
+                <div className="text-base font-semibold text-emerald-300">{(treeStats.mean_height ?? 0).toFixed(1)} m</div>
+              </div>
+              <div className="rounded border border-white/10 bg-white/[0.02] p-2">
+                <div className="text-slate-400">Max height</div>
+                <div className="text-base font-semibold text-emerald-300">{(treeStats.maximum_height ?? 0).toFixed(1)} m</div>
+              </div>
+              <div className="rounded border border-white/10 bg-white/[0.02] p-2">
+                <div className="text-slate-400">Median height</div>
+                <div className="text-base font-semibold text-emerald-300">{(treeStats.median_height ?? 0).toFixed(1)} m</div>
+              </div>
+              <div className="rounded border border-white/10 bg-white/[0.02] p-2">
+                <div className="text-slate-400">Area</div>
+                <div className="text-base font-semibold text-emerald-300">{treeStats.area_hectares.toFixed(2)} ha</div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {overviewMode && showBuildings ? (
         <div className="glass-panel rounded-xl border border-white/10 p-3">
           <div className="mb-2 text-sm font-medium text-slate-100">Buildings</div>
@@ -600,14 +649,16 @@ export function AnalysisPanel({
         </div>
       ) : null}
 
-      {(results ?? []).map((result) => {
-        const isCategorical = result.value_type === "categorical";
-        const palette = result.legend?.palette ?? ["#22d3ee", "#0ea5e9"];
-        const displayTitle = (result.title ?? result.layer_id)
-          .replace(/^Planegg\s+/i, "")
-          .replace(/^NDVI Health$/i, "Vegetation Health (NDVI)");
+      {(results ?? [])
+        .filter((result) => visibleLayerIds.includes(result.layer_id))
+        .map((result) => {
+          const isCategorical = result.value_type === "categorical";
+          const palette = result.legend?.palette ?? ["#22d3ee", "#0ea5e9"];
+          const displayTitle = (result.title ?? result.layer_id)
+            .replace(/^Planegg\s+/i, "")
+            .replace(/^NDVI Health$/i, "Vegetation Health (NDVI)");
 
-        return (
+          return (
           <div key={result.layer_id} className="glass-panel rounded-xl border border-white/10 p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-slate-100">{displayTitle}</span>
@@ -670,7 +721,7 @@ export function AnalysisPanel({
             )}
           </div>
         );
-      })}
+        })}
     </div>
   );
 }

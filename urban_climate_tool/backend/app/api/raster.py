@@ -44,16 +44,21 @@ def sample_raster_point(layer_id: str, lon: float = Query(...), lat: float = Que
 
 
 @router.get("/terrain/status")
-def terrain_status() -> dict[str, bool]:
+def terrain_status(source: str = Query(default="dem")) -> dict[str, Any]:
     service = RasterService(CatalogService())
-    return {"available": service.terrain_available()}
+    sources = service.terrain_sources_available()
+    return {
+        "available": service.terrain_available(source),
+        "source": source,
+        "sources": sources,
+    }
 
 
 @router.get("/terrain/{z}/{x}/{y}.png")
-def get_terrain_tile(z: int, x: int, y: int) -> Response:
+def get_terrain_tile(z: int, x: int, y: int, source: str = Query(default="dem")) -> Response:
     service = RasterService(CatalogService())
     try:
-        tile_bytes, content_type = service.get_terrain_tile(z, x, y)
+        tile_bytes, content_type = service.get_terrain_tile(z, x, y, source=source)
     except LayerUnavailableError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

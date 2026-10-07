@@ -59,6 +59,34 @@ class AreaStatisticsResponse(BaseModel):
     results: list[LayerAreaStatistics]
 
 
+class TreeStatisticsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    geometry: dict
+    layer_id: str = "trees-3d-planegg"
+
+
+class TreeStatisticsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    layer_id: str
+    title: str | None = None
+    tree_count: int
+    area_hectares: float
+    tree_density_per_hectare: float | None = None
+    mean_height: float | None = None
+    median_height: float | None = None
+    maximum_height: float | None = None
+    minimum_height: float | None = None
+    mean_ground_elevation: float | None = None
+
+
+class TreeStatisticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: TreeStatisticsResult
+
+
 class BuildingContextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -18,7 +18,7 @@ layers:
       maxx: 11.463442
       maxy: 48.120001
     acquisition_date: "2026-01-01"
-    default_visible: false
+    default_visible: true
     default_opacity: 1.0
     default_order: 1
     min_zoom: 8
@@ -112,7 +112,7 @@ layers:
     value_range:
       minimum: -1.0
       maximum: 1.0
-    default_visible: true
+    default_visible: false
     default_opacity: 0.75
     default_order: 10
     min_zoom: 8
@@ -177,7 +177,7 @@ layers:
     value_range:
       minimum: 18
       maximum: 32
-    default_visible: true
+    default_visible: false
     default_opacity: 0.75
     default_order: 20
     min_zoom: 8
@@ -281,6 +281,49 @@ layers:
       - planegg
     is_demo: false
 
+  - id: rgb20cm-planegg
+    title: Orthophoto RGB (20cm)
+    short_title: RGB 20cm
+    description: High-resolution true-color orthophoto (20cm) for Planegg from Bayern Open Data meta4 delivery, captured on 2024-08-24.
+    layer_type: raster
+    thematic_group: Basemap
+    area: planegg
+    storage_backend: local
+    relative_path: rasters/processed/planegg/rgb_20cm.tif
+    data_format: geotiff
+    source: "Bayern Orthophoto RGB 20cm (image date 2024-08-24; meta4 published 2026-10-06)"
+    attribution: "© Bayerische Vermessungsverwaltung"
+    units: "RGB"
+    value_type: rgb
+    native_crs: EPSG:25832
+    acquisition_date: "2024-08-24"
+    spatial_resolution: 0.2
+    nodata: 0
+    default_visible: false
+    default_opacity: 1.0
+    default_order: 25
+    min_zoom: 8
+    max_zoom: 20
+    inspectable: false
+    selectable: false
+    style:
+      color_scale: "rgb"
+      interpolation: "linear"
+      opacity: 1.0
+    legend:
+      type: categorical
+      palette:
+        - "#000000"
+      labels:
+        - "True-color imagery"
+    analysis_capabilities: []
+    tags:
+      - orthophoto
+      - rgb
+      - 20cm
+      - planegg
+    is_demo: false
+
   - id: buildings-3d-planegg
     title: 3D Buildings (LoD2) – Planegg
     short_title: 3D Buildings
@@ -375,4 +418,51 @@ layers:
       - elderly
       - children
       - planegg
+    is_demo: false
+
+  - id: trees-3d-planegg
+    title: Individual Trees (3D) – Planegg
+    short_title: 3D Trees
+    description: Individual tree locations with heights derived from the Bayern Open Data Einzelbäume dataset, using the 2025-02-13 dataset release for Planegg. Features point locations with absolute and relative height attributes for 3D visualization.
+    layer_type: vector
+    thematic_group: Vegetation
+    area: planegg
+    storage_backend: local
+    relative_path: vectors/processed/planegg/trees.geojson
+    data_format: geojson
+    source: "Bayern OpenGeoData – Einzelbäume (Individual Trees), dataset release 2025-02-13"
+    attribution: "© Bayerische Landesanstalt für Wald und Forstwirtschaft, Bayerisches Landesamt für Digitalisierung, Breitband und Vermessung"
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.378
+      miny: 48.074
+      maxx: 11.471
+      maxy: 48.125
+    acquisition_date: "2025-02-13"
+    spatial_resolution: 1
+    default_visible: true
+    default_opacity: 0.85
+    default_order: 36
+    min_zoom: 13
+    max_zoom: 20
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "trees3d"
+      opacity: 0.85
+    legend:
+      type: categorical
+      palette:
+        - "#166534"
+      labels:
+        - "Tree (3D extrusion)"
+    analysis_capabilities:
+      - point_value
+    tags:
+      - trees
+      - vegetation
+      - 3d
+      - height
+      - planegg
+      - einzelbaeume
     is_demo: false
