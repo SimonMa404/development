@@ -6,6 +6,7 @@ import type {
   ClassBreakdownItem,
   HeatVulnerabilityResult,
   Histogram,
+  LandUseCompositionResult,
   LayerAreaStatistics,
   TreeStatisticsResult,
 } from "@/types/analysis";
@@ -255,6 +256,29 @@ function LulcPie({ items }: { items: ClassBreakdownItem[] }) {
   );
 }
 
+function nutzungColorForCategory(category: string): string {
+  const palette: Record<string, string> = {
+    "Wohnbaufläche": "#f59e0b",
+    "Industrie- und Gewerbefläche": "#6b7280",
+    "Fläche gemischter Nutzung": "#a855f7",
+    "Sport-, Freizeit- und Erholungsfläche": "#84cc16",
+    Landwirtschaft: "#eab308",
+    Wald: "#15803d",
+    Gehölz: "#22c55e",
+    "Stehendes Gewässer": "#3b82f6",
+    "Fließgewässer": "#06b6d4",
+    Straßenverkehr: "#475569",
+    Bahnverkehr: "#334155",
+    Weg: "#94a3b8",
+    Platz: "#cbd5e1",
+    Friedhof: "#65a30d",
+    "Fläche besonderer funktionaler Prägung": "#f97316",
+    "Tagebau, Grube, Steinbruch": "#92400e",
+    "Unland/Vegetationslose Fläche": "#78716c",
+  };
+  return palette[category] ?? "#64748b";
+}
+
 function HeatPopulationPie({ vulnerability, palette }: { vulnerability: HeatVulnerabilityResult; palette: string[] }) {
   const bins = (vulnerability.lst_exposure_bins ?? []).filter((item) => (item.population ?? 0) > 0);
   const total = bins.reduce((sum, item) => sum + (item.population ?? 0), 0);
@@ -477,6 +501,67 @@ function ClassBreakdownList({
   );
 }
 
+function LandUseCompositionPanel({
+  landUse,
+}: {
+  landUse: LandUseCompositionResult;
+}) {
+  const slices: PieSlice[] = landUse.classes
+    .filter((item) => item.area_hectares > 0)
+    .map((item) => ({
+      label: item.category,
+      value: item.area_hectares,
+      color: nutzungColorForCategory(item.category),
+    }));
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded border border-white/10 bg-white/[0.02] p-2">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Category mix</div>
+        <div className="mt-1">
+          <InteractivePieChart slices={slices} />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        {landUse.classes.map((item) => {
+          const color = nutzungColorForCategory(item.category);
+          return (
+            <div key={item.category} className="rounded border border-white/10 bg-white/[0.02] p-2">
+              <div className="mb-1 flex items-center justify-between text-[11px] text-slate-200">
+                <span className="inline-flex min-w-0 items-center gap-2 pr-2">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
+                  <span className="truncate">{item.category}</span>
+                </span>
+                <span>{item.share_of_selected_pct.toFixed(1)}%</span>
+              </div>
+              <div className="h-2 w-full rounded bg-white/5">
+                <div
+                  className="h-2 rounded"
+                  style={{
+                    width: `${Math.max(1, Math.min(100, item.share_of_selected_pct))}%`,
+                    backgroundColor: color,
+                  }}
+                />
+              </div>
+              <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                <span>{item.area_hectares.toFixed(2)} ha</span>
+                <span>{item.feature_count} features</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {landUse.summary.uncovered_area_hectares > 0.01 ? (
+        <div className="text-[10px] text-slate-500">
+          Uncovered in selection: {landUse.summary.uncovered_area_hectares.toFixed(2)} ha
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AnalysisPanel({
   results,
   isPending,
@@ -495,6 +580,11 @@ export function AnalysisPanel({
   showBuildings = true,
   showVulnerability = true,
   showTrees = true,
+  showLandUse = false,
+  landUse = null,
+  landUsePending = false,
+  landUseError = null,
+  totalAreaHectares = null,
   visibleLayerIds = [],
 }: {
   results: LayerAreaStatistics[] | undefined;
@@ -514,6 +604,11 @@ export function AnalysisPanel({
   showBuildings?: boolean;
   showVulnerability?: boolean;
   showTrees?: boolean;
+  showLandUse?: boolean;
+  landUse?: LandUseCompositionResult | null;
+  landUsePending?: boolean;
+  landUseError?: Error | null;
+  totalAreaHectares?: number | null;
   visibleLayerIds?: string[];
 }) {
   const hasRasterResults = Boolean(results && results.length > 0);
@@ -536,6 +631,13 @@ export function AnalysisPanel({
 
   return (
     <div className="space-y-4">
+      {totalAreaHectares !== null ? (
+        <div className="glass-panel rounded-xl border border-white/10 p-3">
+          <div className="text-sm font-medium text-slate-100">Total area</div>
+          <div className="mt-1 text-2xl font-semibold text-cyan-300">{totalAreaHectares.toFixed(2)} ha</div>
+        </div>
+      ) : null}
+
       {showTrees ? (
         <div className="glass-panel rounded-xl border border-white/10 p-3">
           <div className="mb-2 text-sm font-medium text-slate-100">Trees</div>
@@ -641,6 +743,15 @@ export function AnalysisPanel({
           </>
         ) : null}
       </div>
+      ) : null}
+
+      {showLandUse ? (
+        <div className="glass-panel rounded-xl border border-white/10 p-3">
+          <div className="mb-2 text-sm font-medium text-slate-100">ALKIS land-use composition</div>
+          {landUsePending ? <div className="text-[11px] text-slate-500">Computing ALKIS composition…</div> : null}
+          {landUseError ? <div className="text-[11px] text-red-300">{landUseError.message}</div> : null}
+          {landUse ? <LandUseCompositionPanel landUse={landUse} /> : null}
+        </div>
       ) : null}
 
       {!hasRasterResults ? (

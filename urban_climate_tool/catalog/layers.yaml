@@ -466,3 +466,79 @@ layers:
       - planegg
       - einzelbaeume
     is_demo: false
+
+  - id: nutzung-planegg
+    title: ALKIS Tatsächliche Nutzung – Planegg
+    short_title: ALKIS Nutzung
+    description: ALKIS tatsächliche Nutzung polygons clipped to the Planegg analysis region, with categories based on the `nutzart` attribute.
+    layer_type: vector
+    thematic_group: Land Use
+    area: planegg
+    storage_backend: local
+    relative_path: vectors/processed/planegg/nutzung.geojson
+    data_format: geojson
+    source: "ALKIS Tatsächliche Nutzung (KIS-WFS Ausgabeformat Shape, Version 2.0.0)"
+    attribution: "© Bayerische Vermessungsverwaltung"
+    native_crs: EPSG:4326
+    bounds:
+      minx: 11.385237
+      miny: 48.078465
+      maxx: 11.463442
+      maxy: 48.118544
+    acquisition_date: "2026-09-15"
+    default_visible: false
+    default_opacity: 0.7
+    default_order: 41
+    min_zoom: 11
+    max_zoom: 20
+    inspectable: true
+    selectable: true
+    style:
+      color_scale: "nutzung"
+      opacity: 0.7
+    legend:
+      type: categorical
+      palette:
+        - "#f59e0b"
+        - "#6b7280"
+        - "#a855f7"
+        - "#84cc16"
+        - "#eab308"
+        - "#15803d"
+        - "#22c55e"
+        - "#3b82f6"
+        - "#06b6d4"
+        - "#475569"
+        - "#334155"
+        - "#94a3b8"
+        - "#cbd5e1"
+        - "#65a30d"
+        - "#f97316"
+        - "#92400e"
+        - "#78716c"
+      labels:
+        - "Wohnbaufläche"
+        - "Industrie- und Gewerbefläche"
+        - "Fläche gemischter Nutzung"
+        - "Sport-, Freizeit- und Erholungsfläche"
+        - "Landwirtschaft"
+        - "Wald"
+        - "Gehölz"
+        - "Stehendes Gewässer"
+        - "Fließgewässer"
+        - "Straßenverkehr"
+        - "Bahnverkehr"
+        - "Weg"
+        - "Platz"
+        - "Friedhof"
+        - "Fläche besonderer funktionaler Prägung"
+        - "Tagebau, Grube, Steinbruch"
+        - "Unland/Vegetationslose Fläche"
+    analysis_capabilities:
+      - point_value
+    tags:
+      - alkis
+      - land-use
+      - nutzung
+      - planegg
+    is_demo: false

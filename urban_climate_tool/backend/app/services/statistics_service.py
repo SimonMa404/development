@@ -408,7 +408,6 @@ class StatisticsService:
 
         selected_geom_4326 = shape(geometry)
         selected_geom_3035 = gpd.GeoSeries([selected_geom_4326], crs="EPSG:4326").to_crs(epsg=3035).iloc[0]
-
         census_gdf = gpd.read_file(census_path)
         if census_gdf.empty:
             return {
@@ -528,6 +527,142 @@ class StatisticsService:
             },
             "lst_exposure_bins": lst_exposures,
             "ndvi_exposure_bins": ndvi_exposures,
+        }
+
+    def land_use_composition(
+        self,
+        geometry: dict[str, Any],
+        layer_id: str = "nutzung-planegg",
+        category_field: str = "nutzart",
+    ) -> dict[str, Any]:
+        layer = self.catalog_service.get_by_id(layer_id)
+        if layer.layer_type != "vector":
+            raise LayerUnavailableError(f"Layer '{layer_id}' is not a vector layer.")
+
+        layer_path = settings.data_root_path / layer.relative_path
+        if not layer_path.exists():
+            raise LayerUnavailableError(f"Layer file not found: {layer.relative_path}")
+
+        selected_geom_4326 = shape(geometry)
+        if selected_geom_4326.is_empty:
+            raise LayerUnavailableError("Selected geometry is empty.")
+
+        selected_geom_25832 = gpd.GeoSeries([selected_geom_4326], crs="EPSG:4326").to_crs(epsg=25832).iloc[0]
+        selected_area_m2 = float(selected_geom_25832.area)
+
+        if selected_area_m2 <= 0:
+            raise LayerUnavailableError("Selected geometry has zero area.")
+
+        features = self.vector_repository.read_frame(layer.relative_path, bbox=list(selected_geom_4326.bounds))
+        if features.empty:
+            return {
+                "layer_id": layer_id,
+                "title": layer.title,
+                "category_field": category_field,
+                "summary": {
+                    "selected_area_m2": selected_area_m2,
+                    "selected_area_hectares": selected_area_m2 / 10000.0,
+                    "covered_area_m2": 0.0,
+                    "covered_area_hectares": 0.0,
+                    "covered_share_pct": 0.0,
+                    "uncovered_area_m2": selected_area_m2,
+                    "uncovered_area_hectares": selected_area_m2 / 10000.0,
+                },
+                "classes": [],
+            }
+
+        if features.crs is None:
+            features = features.set_crs("EPSG:4326")
+
+        features_25832 = features.to_crs(epsg=25832) if str(features.crs) != "EPSG:25832" else features.copy()
+        candidates = features_25832.loc[features_25832.geometry.intersects(selected_geom_25832)].copy()
+
+        if candidates.empty:
+            return {
+                "layer_id": layer_id,
+                "title": layer.title,
+                "category_field": category_field,
+                "summary": {
+                    "selected_area_m2": selected_area_m2,
+                    "selected_area_hectares": selected_area_m2 / 10000.0,
+                    "covered_area_m2": 0.0,
+                    "covered_area_hectares": 0.0,
+                    "covered_share_pct": 0.0,
+                    "uncovered_area_m2": selected_area_m2,
+                    "uncovered_area_hectares": selected_area_m2 / 10000.0,
+                },
+                "classes": [],
+            }
+
+        candidates["_intersection_area_m2"] = candidates.geometry.intersection(selected_geom_25832).area
+        intersections = candidates.loc[candidates["_intersection_area_m2"] > 0].copy()
+
+        if intersections.empty:
+            return {
+                "layer_id": layer_id,
+                "title": layer.title,
+                "category_field": category_field,
+                "summary": {
+                    "selected_area_m2": selected_area_m2,
+                    "selected_area_hectares": selected_area_m2 / 10000.0,
+                    "covered_area_m2": 0.0,
+                    "covered_area_hectares": 0.0,
+                    "covered_share_pct": 0.0,
+                    "uncovered_area_m2": selected_area_m2,
+                    "uncovered_area_hectares": selected_area_m2 / 10000.0,
+                },
+                "classes": [],
+            }
+
+        if category_field not in intersections.columns:
+            intersections[category_field] = "Unknown"
+
+        intersections[category_field] = (
+            intersections[category_field]
+            .fillna("Unknown")
+            .astype(str)
+            .str.strip()
+            .replace({"": "Unknown"})
+        )
+
+        grouped = (
+            intersections.groupby(category_field, dropna=False)
+            .agg(feature_count=(category_field, "size"), area_m2=("_intersection_area_m2", "sum"))
+            .reset_index()
+            .sort_values("area_m2", ascending=False)
+        )
+
+        covered_area_m2 = float(grouped["area_m2"].sum())
+        uncovered_area_m2 = max(0.0, selected_area_m2 - covered_area_m2)
+
+        classes: list[dict[str, Any]] = []
+        for _, row in grouped.iterrows():
+            area_m2 = float(row["area_m2"])
+            classes.append(
+                {
+                    "category": str(row[category_field]),
+                    "feature_count": int(row["feature_count"]),
+                    "area_m2": area_m2,
+                    "area_hectares": area_m2 / 10000.0,
+                    "share_of_selected_pct": (100.0 * area_m2 / selected_area_m2) if selected_area_m2 > 0 else 0.0,
+                    "share_of_covered_pct": (100.0 * area_m2 / covered_area_m2) if covered_area_m2 > 0 else 0.0,
+                }
+            )
+
+        return {
+            "layer_id": layer_id,
+            "title": layer.title,
+            "category_field": category_field,
+            "summary": {
+                "selected_area_m2": selected_area_m2,
+                "selected_area_hectares": selected_area_m2 / 10000.0,
+                "covered_area_m2": covered_area_m2,
+                "covered_area_hectares": covered_area_m2 / 10000.0,
+                "covered_share_pct": (100.0 * covered_area_m2 / selected_area_m2) if selected_area_m2 > 0 else 0.0,
+                "uncovered_area_m2": uncovered_area_m2,
+                "uncovered_area_hectares": uncovered_area_m2 / 10000.0,
+            },
+            "classes": classes,
         }
 
     @staticmethod

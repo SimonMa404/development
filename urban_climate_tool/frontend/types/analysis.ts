@@ -149,3 +149,40 @@ export type HeatVulnerabilityRequest = {
 export type HeatVulnerabilityResponse = {
   result: HeatVulnerabilityResult;
 };
+
+export type LandUseCompositionClass = {
+  category: string;
+  feature_count: number;
+  area_m2: number;
+  area_hectares: number;
+  share_of_selected_pct: number;
+  share_of_covered_pct: number;
+};
+
+export type LandUseCompositionSummary = {
+  selected_area_m2: number;
+  selected_area_hectares: number;
+  covered_area_m2: number;
+  covered_area_hectares: number;
+  covered_share_pct: number;
+  uncovered_area_m2: number;
+  uncovered_area_hectares: number;
+};
+
+export type LandUseCompositionResult = {
+  layer_id: string;
+  title?: string;
+  category_field: string;
+  summary: LandUseCompositionSummary;
+  classes: LandUseCompositionClass[];
+};
+
+export type LandUseCompositionRequest = {
+  geometry: PolygonGeometry;
+  layer_id?: string;
+  category_field?: string;
+};
+
+export type LandUseCompositionResponse = {
+  result: LandUseCompositionResult;
+};

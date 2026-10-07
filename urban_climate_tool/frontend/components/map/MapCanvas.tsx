@@ -19,10 +19,59 @@ const VECTOR_COLORS: Record<string, string> = {
   buildings3d: "#6b7280",
   trees3d: "#166534",
   population: "#3b82f6",
+  nutzung: "#7c3aed",
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const NUTZUNG_COLOR_MATCH_EXPRESSION: any = [
+  "match",
+  ["coalesce", ["get", "nutzart"], ""],
+  "Wohnbaufläche",
+  "#f59e0b",
+  "Industrie- und Gewerbefläche",
+  "#6b7280",
+  "Fläche gemischter Nutzung",
+  "#a855f7",
+  "Sport-, Freizeit- und Erholungsfläche",
+  "#84cc16",
+  "Landwirtschaft",
+  "#eab308",
+  "Wald",
+  "#15803d",
+  "Gehölz",
+  "#22c55e",
+  "Stehendes Gewässer",
+  "#3b82f6",
+  "Fließgewässer",
+  "#06b6d4",
+  "Straßenverkehr",
+  "#475569",
+  "Bahnverkehr",
+  "#334155",
+  "Weg",
+  "#94a3b8",
+  "Platz",
+  "#cbd5e1",
+  "Friedhof",
+  "#65a30d",
+  "Fläche besonderer funktionaler Prägung",
+  "#f97316",
+  "Tagebau, Grube, Steinbruch",
+  "#92400e",
+  "Unland/Vegetationslose Fläche",
+  "#78716c",
+  "#64748b",
+];
 
 export type BasemapId = "satellite" | "hybrid" | "dark";
 export type TerrainSourceId = "dem" | "dom";
+
+type ClickedVectorFeature = {
+  id: string;
+  properties: Record<string, unknown>;
+  geometry: Record<string, unknown>;
+  lngLat: [number, number];
+};
 
 const ESRI_ATTRIBUTION = "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
 
@@ -109,6 +158,7 @@ export function MapCanvas({
   drawnPoints = [],
   onMapClick,
   onBuildingClick,
+  onNutzungClick,
   basemap = "satellite",
   terrain3dEnabled = false,
   terrainSource = "dem",
@@ -116,18 +166,15 @@ export function MapCanvas({
   terrainExaggeration = 1.8,
   hillshadeStrength = 0.7,
   selectedBuildingId = null,
+  selectedNutzungId = null,
 }: {
   layers: CatalogLayer[];
   apiBaseUrl: string;
   drawMode?: boolean;
   drawnPoints?: [number, number][];
   onMapClick?: (lngLat: [number, number]) => void;
-  onBuildingClick?: (payload: {
-    id: string;
-    properties: Record<string, unknown>;
-    geometry: Record<string, unknown>;
-    lngLat: [number, number];
-  }) => void;
+  onBuildingClick?: (payload: ClickedVectorFeature) => void;
+  onNutzungClick?: (payload: ClickedVectorFeature) => void;
   basemap?: BasemapId;
   terrain3dEnabled?: boolean;
   terrainSource?: TerrainSourceId;
@@ -135,6 +182,7 @@ export function MapCanvas({
   terrainExaggeration?: number;
   hillshadeStrength?: number;
   selectedBuildingId?: string | null;
+  selectedNutzungId?: string | null;
 }) {
   const mapRef = useRef<MapRef>(null);
   const previousTerrainEnabledRef = useRef(false);
@@ -153,10 +201,15 @@ export function MapCanvas({
 
     const normalLayers = sorted.filter((layer) => !isPriority3dLayer(layer));
     const priority3dLayers = sorted.filter(isPriority3dLayer);
-    return [...normalLayers, ...priority3dLayers];
-  }, [layers]);
 
-  const interactiveLayerIds = useMemo(
+    if (drawMode) {
+      return normalLayers;
+    }
+
+    return [...normalLayers, ...priority3dLayers];
+  }, [layers, drawMode]);
+
+  const buildingInteractiveLayerIds = useMemo(
     () =>
       visibleLayers
         .filter((layer) => layer.layer_type === "vector" && layer.style?.color_scale === "buildings3d")
@@ -168,13 +221,60 @@ export function MapCanvas({
     [visibleLayers, domMode],
   );
 
+  const nutzungInteractiveLayerIds = useMemo(
+    () =>
+      visibleLayers
+        .filter((layer) => layer.layer_type === "vector" && layer.style?.color_scale === "nutzung")
+        .flatMap((layer) => [`${layer.id}-hit`, `${layer.id}-fill`, `${layer.id}-line`]),
+    [visibleLayers],
+  );
+
+  const interactiveLayerIds = useMemo(
+    () => (drawMode ? [] : [...buildingInteractiveLayerIds, ...nutzungInteractiveLayerIds]),
+    [buildingInteractiveLayerIds, nutzungInteractiveLayerIds, drawMode],
+  );
+
   const handleClick = useCallback(
     (event: MapLayerMouseEvent) => {
-      const buildingFeature = event.features?.find((feature) =>
-        String(feature.layer.id).includes("-extrusion") ||
-        String(feature.layer.id).includes("-outline") ||
-        String(feature.layer.id).includes("-fill"),
-      );
+      if (drawMode) {
+        onMapClick?.([event.lngLat.lng, event.lngLat.lat]);
+        return;
+      }
+
+      const map = mapRef.current?.getMap();
+      const nutzungLayerIds = new Set(nutzungInteractiveLayerIds);
+      const buildingLayerIds = new Set(buildingInteractiveLayerIds);
+
+      const desiredLayerIds = [...nutzungInteractiveLayerIds, ...buildingInteractiveLayerIds];
+      const queryableLayerIds = map
+        ? desiredLayerIds.filter((layerId) => Boolean(map.getLayer(layerId)))
+        : [];
+
+      let clickFeatures = event.features ?? [];
+      if (map && queryableLayerIds.length > 0) {
+        try {
+          clickFeatures = map.queryRenderedFeatures(event.point, {
+            layers: queryableLayerIds,
+          });
+        } catch {
+          clickFeatures = event.features ?? [];
+        }
+      }
+
+      const nutzungFeature = clickFeatures.find((feature) => nutzungLayerIds.has(String(feature.layer.id)));
+      if (nutzungFeature && onNutzungClick) {
+        const props = (nutzungFeature.properties ?? {}) as Record<string, unknown>;
+        const id = String(props.oid ?? props.id ?? nutzungFeature.id ?? "unknown-nutzung");
+        onNutzungClick({
+          id,
+          properties: props,
+          geometry: nutzungFeature.geometry as unknown as Record<string, unknown>,
+          lngLat: [event.lngLat.lng, event.lngLat.lat],
+        });
+        return;
+      }
+
+      const buildingFeature = clickFeatures.find((feature) => buildingLayerIds.has(String(feature.layer.id)));
 
       if (buildingFeature && onBuildingClick) {
         const props = (buildingFeature.properties ?? {}) as Record<string, unknown>;
@@ -190,7 +290,7 @@ export function MapCanvas({
 
       onMapClick?.([event.lngLat.lng, event.lngLat.lat]);
     },
-    [onMapClick, onBuildingClick],
+    [drawMode, onMapClick, onBuildingClick, onNutzungClick, buildingInteractiveLayerIds, nutzungInteractiveLayerIds],
   );
 
   const polygon = drawnPolygonFeature(drawnPoints);
@@ -223,6 +323,23 @@ export function MapCanvas({
 
     return () => window.clearTimeout(timer);
   }, [terrain3dEnabled, terrainAvailable, terrainExaggeration, domMode, terrainRevision, mapStyle]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+
+      // Keep drawn selection overlays above all other layers.
+      const drawLayerOrder = ["draw-polygon-fill", "draw-polygon-line", "draw-points-layer"];
+      for (const layerId of drawLayerOrder) {
+        if (map.getLayer(layerId)) {
+          map.moveLayer(layerId);
+        }
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [terrainRevision, drawnPoints.length, Boolean(polygon)]);
 
   return (
     <div className="relative h-full w-full">
@@ -552,6 +669,61 @@ export function MapCanvas({
               );
             }
 
+            if (layer.style?.color_scale === "nutzung") {
+              return (
+                <Source key={layer.id} id={layer.id} type="geojson" data={`${apiBaseUrl}/api/vectors/${layer.id}`}>
+                  <Layer
+                    id={`${layer.id}-hit`}
+                    type="fill"
+                    paint={{
+                      "fill-color": "#000000",
+                      "fill-opacity": 0.01,
+                    }}
+                  />
+                  <Layer
+                    id={`${layer.id}-fill`}
+                    type="fill"
+                    paint={{
+                      "fill-color": NUTZUNG_COLOR_MATCH_EXPRESSION,
+                      "fill-opacity": Math.max(0.2, layer.default_opacity * 0.62),
+                    }}
+                  />
+                  <Layer
+                    id={`${layer.id}-line`}
+                    type="line"
+                    paint={{
+                      "line-color": "#0f172a",
+                      "line-width": 0.45,
+                      "line-opacity": Math.max(0.35, layer.default_opacity * 0.7),
+                    }}
+                  />
+                  {selectedNutzungId ? (
+                    <Layer
+                      id={`${layer.id}-selected-fill`}
+                      type="fill"
+                      filter={["==", ["to-string", ["get", "oid"]], selectedNutzungId]}
+                      paint={{
+                        "fill-color": "#fde047",
+                        "fill-opacity": 0.3,
+                      }}
+                    />
+                  ) : null}
+                  {selectedNutzungId ? (
+                    <Layer
+                      id={`${layer.id}-selected-line`}
+                      type="line"
+                      filter={["==", ["to-string", ["get", "oid"]], selectedNutzungId]}
+                      paint={{
+                        "line-color": "#fde047",
+                        "line-width": 2.2,
+                        "line-opacity": 1,
+                      }}
+                    />
+                  ) : null}
+                </Source>
+              );
+            }
+
             return (
               <Source key={layer.id} id={layer.id} type="geojson" data={`${apiBaseUrl}/api/vectors/${layer.id}`}>
                 <Layer
@@ -606,6 +778,7 @@ export function MapCanvas({
             />
           </Source>
         ) : null}
+
       </Map>
 
       <div className="pointer-events-auto absolute right-4 top-4 z-10">

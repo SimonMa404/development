@@ -190,6 +190,53 @@ class HeatVulnerabilityResponse(BaseModel):
     result: HeatVulnerabilityResult
 
 
+class LandUseCompositionClass(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: str
+    feature_count: int
+    area_m2: float
+    area_hectares: float
+    share_of_selected_pct: float
+    share_of_covered_pct: float
+
+
+class LandUseCompositionSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    selected_area_m2: float
+    selected_area_hectares: float
+    covered_area_m2: float
+    covered_area_hectares: float
+    covered_share_pct: float
+    uncovered_area_m2: float
+    uncovered_area_hectares: float
+
+
+class LandUseCompositionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    layer_id: str
+    title: str | None = None
+    category_field: str
+    summary: LandUseCompositionSummary
+    classes: list[LandUseCompositionClass]
+
+
+class LandUseCompositionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    geometry: dict
+    layer_id: str = "nutzung-planegg"
+    category_field: str = "nutzart"
+
+
+class LandUseCompositionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: LandUseCompositionResult
+
+
 class PointSampleResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

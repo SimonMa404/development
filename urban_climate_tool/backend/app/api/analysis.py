@@ -12,6 +12,8 @@ from app.schemas.analysis import (
     BuildingOverviewResponse,
     HeatVulnerabilityRequest,
     HeatVulnerabilityResponse,
+    LandUseCompositionRequest,
+    LandUseCompositionResponse,
     TreeStatisticsRequest,
     TreeStatisticsResponse,
 )
@@ -92,3 +94,19 @@ def heat_vulnerability(payload: HeatVulnerabilityRequest) -> HeatVulnerabilityRe
     except LayerUnavailableError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return HeatVulnerabilityResponse(result=result)
+
+
+@router.post("/analysis/land-use-composition", response_model=LandUseCompositionResponse)
+def land_use_composition(payload: LandUseCompositionRequest) -> LandUseCompositionResponse:
+    service = StatisticsService(CatalogService())
+    try:
+        result = service.land_use_composition(
+            geometry=payload.geometry,
+            layer_id=payload.layer_id,
+            category_field=payload.category_field,
+        )
+    except LayerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LayerUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return LandUseCompositionResponse(result=result)

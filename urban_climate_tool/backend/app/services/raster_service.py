@@ -126,9 +126,9 @@ class RasterService:
             raise LayerUnavailableError(f"Unsupported terrain source '{source}'.")
 
         dem_path = self.repository.raster_path(source_path)
+        fallback_rgb = self._fetch_fallback_terrain_tile(z, x, y)
 
         if not dem_path.exists():
-            fallback_rgb = self._fetch_fallback_terrain_tile(z, x, y)
             if fallback_rgb is None:
                 raise LayerUnavailableError(f"Terrain source '{source}' is missing and fallback terrain tile is unavailable.")
             return self._encode_rgb_png(fallback_rgb), "image/png"
@@ -137,7 +137,6 @@ class RasterService:
             with Reader(dem_path) as reader:
                 image = reader.tile(x, y, z, tilesize=256)
         except TileOutsideBounds:
-            fallback_rgb = self._fetch_fallback_terrain_tile(z, x, y)
             if fallback_rgb is None:
                 raise LayerUnavailableError("Requested terrain tile is outside DEM bounds and fallback is unavailable.")
             return self._encode_rgb_png(fallback_rgb), "image/png"
@@ -146,10 +145,7 @@ class RasterService:
         valid_mask = np.isfinite(dem) & (dem > -1000.0) & (dem != 0.0)
         if image.mask is not None:
             valid_mask &= image.mask > 0
-
-        # Avoid blending local high-resolution terrain with fallback terrain-rgb.
-        # Mixing datasets creates severe seams/artifacts (especially in DOM mode).
-        if np.any(valid_mask):
+        if fallback_rgb is None and np.any(valid_mask):
             local_fill = float(np.median(dem[valid_mask]))
             dem = np.where(valid_mask, dem, local_fill)
         else:
@@ -161,6 +157,11 @@ class RasterService:
         g = np.floor(encoded % 256.0).astype(np.uint8)
         b = np.floor((encoded - np.floor(encoded)) * 256.0).astype(np.uint8)
         rgb = np.stack([r, g, b], axis=0)
+
+        if fallback_rgb is not None and not np.all(valid_mask):
+            fallback_copy = fallback_rgb.copy()
+            fallback_copy[:, valid_mask] = rgb[:, valid_mask]
+            rgb = fallback_copy
 
         return self._encode_rgb_png(rgb), "image/png"
 

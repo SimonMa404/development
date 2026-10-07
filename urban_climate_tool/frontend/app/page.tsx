@@ -12,12 +12,20 @@ import { AnalysisPanel } from "@/components/analysis/AnalysisPanel";
 import { CollapsiblePanel } from "@/components/layout/CollapsiblePanel";
 import { useLayerCatalog } from "@/hooks/useLayerCatalog";
 import { useAreaStatistics } from "@/hooks/useAreaStatistics";
-import { fetchAreaStatistics, fetchBuildingContext, fetchBuildingsOverview, fetchHeatVulnerability, fetchTreeStatistics } from "@/lib/api/analysis";
+import {
+  fetchAreaStatistics,
+  fetchBuildingContext,
+  fetchBuildingsOverview,
+  fetchHeatVulnerability,
+  fetchLandUseComposition,
+  fetchTreeStatistics,
+} from "@/lib/api/analysis";
 import { API_BASE_URL, fetchJson } from "@/lib/api/client";
 import type {
   BuildingContextResponse,
   BuildingOverviewLayerStatistics,
   HeatVulnerabilityResult,
+  LandUseCompositionResult,
   LayerAreaStatistics,
   TreeStatisticsResult,
 } from "@/types/analysis";
@@ -30,11 +38,53 @@ type SelectedBuilding = {
   lngLat: [number, number];
 };
 
+type SelectedNutzung = {
+  id: string;
+  properties: Record<string, unknown>;
+  geometry: Record<string, unknown>;
+  lngLat: [number, number];
+};
+
+function displayValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
+}
+
+function nutzungCategoryColor(category: unknown): string {
+  const key = String(category ?? "").trim();
+  const palette: Record<string, string> = {
+    "Wohnbaufläche": "#f59e0b",
+    "Industrie- und Gewerbefläche": "#6b7280",
+    "Fläche gemischter Nutzung": "#a855f7",
+    "Sport-, Freizeit- und Erholungsfläche": "#84cc16",
+    Landwirtschaft: "#eab308",
+    Wald: "#15803d",
+    Gehölz: "#22c55e",
+    "Stehendes Gewässer": "#3b82f6",
+    "Fließgewässer": "#06b6d4",
+    Straßenverkehr: "#475569",
+    Bahnverkehr: "#334155",
+    Weg: "#94a3b8",
+    Platz: "#cbd5e1",
+    Friedhof: "#65a30d",
+    "Fläche besonderer funktionaler Prägung": "#f97316",
+    "Tagebau, Grube, Steinbruch": "#92400e",
+    "Unland/Vegetationslose Fläche": "#78716c",
+  };
+  return palette[key] ?? "#64748b";
+}
+
+type DrawnPolygonGeometry = {
+  type: "Polygon";
+  coordinates: number[][][];
+};
+
 export default function HomePage() {
   const { data: catalogLayers, isLoading, error } = useLayerCatalog();
   const [overrides, setOverrides] = useState<Record<string, Partial<CatalogLayer>>>({});
   const [drawMode, setDrawMode] = useState(false);
   const [drawnPoints, setDrawnPoints] = useState<[number, number][]>([]);
+  const [drawnGeometry, setDrawnGeometry] = useState<DrawnPolygonGeometry | null>(null);
   const [basemap, setBasemap] = useState<BasemapId>("satellite");
   const [terrain3dEnabled, setTerrain3dEnabled] = useState(false);
   const [terrainSource, setTerrainSource] = useState<TerrainSourceId>("dem");
@@ -47,6 +97,7 @@ export default function HomePage() {
   const [analysisView, setAnalysisView] = useState<"planegg" | "drawn">("planegg");
   const [hasDrawnSelection, setHasDrawnSelection] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<SelectedBuilding | null>(null);
+  const [selectedNutzung, setSelectedNutzung] = useState<SelectedNutzung | null>(null);
   const [allBuildingHeights, setAllBuildingHeights] = useState<number[]>([]);
   const [overviewResults, setOverviewResults] = useState<LayerAreaStatistics[] | undefined>(undefined);
   const [overviewPending, setOverviewPending] = useState(false);
@@ -55,6 +106,7 @@ export default function HomePage() {
   const [overviewBuildingClimate, setOverviewBuildingClimate] = useState<BuildingOverviewLayerStatistics[]>([]);
   const [overviewVulnerability, setOverviewVulnerability] = useState<HeatVulnerabilityResult | null>(null);
   const [overviewTreeStats, setOverviewTreeStats] = useState<TreeStatisticsResult | null>(null);
+  const [overviewLandUse, setOverviewLandUse] = useState<LandUseCompositionResult | null>(null);
   const domTerrainMode = terrain3dEnabled && terrainSource === "dom";
 
   const areaStatistics = useAreaStatistics();
@@ -93,6 +145,16 @@ export default function HomePage() {
       return response.result;
     },
   });
+  const landUseComposition = useMutation<LandUseCompositionResult, Error, { geometry: { type: "Polygon"; coordinates: number[][][] } }>({
+    mutationFn: async (payload) => {
+      const response = await fetchLandUseComposition({
+        geometry: payload.geometry,
+        layer_id: "nutzung-planegg",
+        category_field: "nutzart",
+      });
+      return response.result;
+    },
+  });
 
   const layers = useMemo(() => {
     if (!catalogLayers) return [];
@@ -119,7 +181,11 @@ export default function HomePage() {
       layers
         .filter((layer) => layer.default_visible && layer.available)
         .filter((layer) => !(layer.value_type === "rgb" || layer.style?.color_scale === "rgb"))
-        .filter((layer) => layer.layer_type === "raster" || (layer.layer_type === "vector" && layer.style?.color_scale === "population")),
+        .filter(
+          (layer) =>
+            layer.layer_type === "raster" ||
+            (layer.layer_type === "vector" && (layer.style?.color_scale === "population" || layer.style?.color_scale === "nutzung")),
+        ),
     [layers],
   );
 
@@ -157,6 +223,14 @@ export default function HomePage() {
   );
   const treesAvailable = useMemo(
     () => availableCatalogLayers.some((layer) => layer.id === "trees-3d-planegg"),
+    [availableCatalogLayers],
+  );
+  const nutzungVisible = useMemo(
+    () => layers.some((layer) => layer.id === "nutzung-planegg" && layer.default_visible && layer.available),
+    [layers],
+  );
+  const nutzungAvailable = useMemo(
+    () => availableCatalogLayers.some((layer) => layer.id === "nutzung-planegg"),
     [availableCatalogLayers],
   );
 
@@ -200,12 +274,13 @@ export default function HomePage() {
     let active = true;
 
     async function loadOverview() {
-      if (overviewLayerIds.length === 0 && !censusAvailable && !treesAvailable && !buildingsAvailable) {
+      if (overviewLayerIds.length === 0 && !censusAvailable && !treesAvailable && !buildingsAvailable && !nutzungAvailable) {
         if (!active) return;
         setOverviewResults([]);
         setOverviewBuildingStats(null);
         setOverviewVulnerability(null);
         setOverviewTreeStats(null);
+        setOverviewLandUse(null);
         setOverviewPending(false);
         return;
       }
@@ -214,7 +289,7 @@ export default function HomePage() {
       setOverviewError(null);
       try {
         const [boundaryFc, buildingsFc] = await Promise.all([
-          fetchJson<{ features: Array<{ geometry: { type: "Polygon"; coordinates: number[][][] } }> }>("/api/vectors/planegg-boundary-buffered"),
+          fetchJson<{ features: Array<{ geometry: { type: "Polygon"; coordinates: number[][][] } }> }>("/api/vectors/planegg-boundary"),
           fetchJson<{ features: Array<{ properties?: { height?: number | string } }> }>("/api/vectors/buildings-3d-planegg"),
         ]);
 
@@ -244,6 +319,14 @@ export default function HomePage() {
             })
           : null;
 
+        const landUse = nutzungAvailable
+          ? await fetchLandUseComposition({
+              geometry: boundary,
+              layer_id: "nutzung-planegg",
+              category_field: "nutzart",
+            })
+          : null;
+
         const buildingsOverviewIds = overviewLayerIds.filter((id) => id === "ndvi-planegg" || id === "lst-planegg");
         const buildingsOverview = buildingsAvailable
           ? await fetchBuildingsOverview({
@@ -260,6 +343,7 @@ export default function HomePage() {
         setOverviewResults(stats.results);
         setOverviewVulnerability(vulnerability?.result ?? null);
         setOverviewTreeStats(treeStats?.result ?? null);
+        setOverviewLandUse(landUse?.result ?? null);
         setOverviewBuildingClimate(buildingsOverview.results);
         setOverviewBuildingStats(
           buildingsAvailable
@@ -281,7 +365,7 @@ export default function HomePage() {
     return () => {
       active = false;
     };
-  }, [overviewLayerIds, censusAvailable, lstAvailable, ndviAvailable, treesAvailable, buildingsAvailable]);
+  }, [overviewLayerIds, censusAvailable, lstAvailable, ndviAvailable, treesAvailable, buildingsAvailable, nutzungAvailable]);
 
   useEffect(() => {
     let active = true;
@@ -326,6 +410,7 @@ export default function HomePage() {
   }
 
   function handleMapClick(lngLat: [number, number]) {
+    setSelectedNutzung(null);
     if (!drawMode) return;
     setDrawnPoints((prev) => [...prev, lngLat]);
   }
@@ -333,25 +418,8 @@ export default function HomePage() {
   function handleFinishDraw() {
     if (drawnPoints.length < 3) return;
     const ring = [...drawnPoints, drawnPoints[0]];
-    const polygon = { type: "Polygon" as const, coordinates: [ring] };
-    areaStatistics.mutate({
-      geometry: polygon,
-      layer_ids: inspectableRasterLayers.map((layer) => layer.id),
-    });
-    if (censusVisible) {
-      heatVulnerability.mutate({
-        geometry: polygon,
-        lstLayerId: lstVisible ? "lst-planegg" : null,
-        ndviLayerId: ndviVisible ? "ndvi-planegg" : null,
-      });
-    } else {
-      heatVulnerability.reset();
-    }
-    if (treesAvailable) {
-      treeStatistics.mutate({ geometry: polygon });
-    } else {
-      treeStatistics.reset();
-    }
+    const polygon: DrawnPolygonGeometry = { type: "Polygon", coordinates: [ring] };
+    setDrawnGeometry(polygon);
     setHasDrawnSelection(true);
     setAnalysisView("drawn");
     setDrawMode(false);
@@ -360,6 +428,7 @@ export default function HomePage() {
   function handleClearDraw() {
     setDrawMode(false);
     setDrawnPoints([]);
+    setDrawnGeometry(null);
     areaStatistics.reset();
     heatVulnerability.reset();
     treeStatistics.reset();
@@ -367,12 +436,59 @@ export default function HomePage() {
     setAnalysisView("planegg");
   }
 
+  useEffect(() => {
+    if (!hasDrawnSelection || !drawnGeometry) return;
+
+    areaStatistics.mutate({
+      geometry: drawnGeometry,
+      layer_ids: inspectableRasterLayers.map((layer) => layer.id),
+    });
+
+    if (censusVisible) {
+      heatVulnerability.mutate({
+        geometry: drawnGeometry,
+        lstLayerId: lstVisible ? "lst-planegg" : null,
+        ndviLayerId: ndviVisible ? "ndvi-planegg" : null,
+      });
+    } else {
+      heatVulnerability.reset();
+    }
+
+    if (treesAvailable) {
+      treeStatistics.mutate({ geometry: drawnGeometry });
+    } else {
+      treeStatistics.reset();
+    }
+
+    if (nutzungAvailable) {
+      landUseComposition.mutate({ geometry: drawnGeometry });
+    } else {
+      landUseComposition.reset();
+    }
+  }, [
+    hasDrawnSelection,
+    drawnGeometry,
+    inspectableRasterLayers,
+    censusVisible,
+    lstVisible,
+    ndviVisible,
+    treesAvailable,
+    nutzungAvailable,
+  ]);
+
   function handleBuildingClick(building: SelectedBuilding) {
+    setSelectedNutzung(null);
     setSelectedBuilding(building);
     buildingContext.mutate({
       geometry: building.geometry,
       layer_ids: ["lst-planegg", "ndvi-planegg"],
     });
+  }
+
+  function handleNutzungClick(feature: SelectedNutzung) {
+    setSelectedBuilding(null);
+    buildingContext.reset();
+    setSelectedNutzung(feature);
   }
 
   const selectedBuildingHeight = Number(selectedBuilding?.properties.height ?? 0);
@@ -392,6 +508,10 @@ export default function HomePage() {
   const treeStatsResult = useDrawnView ? (treeStatistics.data ?? null) : overviewTreeStats;
   const treeStatsPending = useDrawnView ? treeStatistics.isPending : overviewPending;
   const treeStatsError = useDrawnView ? treeStatistics.error : null;
+  const landUseResult = useDrawnView ? (landUseComposition.data ?? null) : overviewLandUse;
+  const landUsePending = useDrawnView ? landUseComposition.isPending : overviewPending;
+  const landUseError = useDrawnView ? landUseComposition.error : null;
+  const totalAreaHectares = landUseResult?.summary.selected_area_hectares ?? treeStatsResult?.area_hectares ?? null;
 
   if (isLoading) {
     return (
@@ -498,6 +618,7 @@ export default function HomePage() {
             drawnPoints={drawnPoints}
             onMapClick={handleMapClick}
             onBuildingClick={handleBuildingClick}
+            onNutzungClick={handleNutzungClick}
             basemap={basemap}
             terrain3dEnabled={terrain3dEnabled}
             terrainSource={terrainSource}
@@ -505,6 +626,7 @@ export default function HomePage() {
             terrainExaggeration={domTerrainMode ? 1 : terrainExaggeration}
             hillshadeStrength={domTerrainMode ? 0 : hillshadeStrength}
             selectedBuildingId={selectedBuilding?.id ?? null}
+            selectedNutzungId={selectedNutzung?.id ?? null}
           />
 
           <div className={`pointer-events-none absolute left-4 top-4 z-10 ${layersPanelOpen ? "h-[calc(100%-2rem)]" : ""}`}>
@@ -532,6 +654,9 @@ export default function HomePage() {
                 pointCount={drawnPoints.length}
                 onStart={() => {
                   setDrawnPoints([]);
+                  setSelectedBuilding(null);
+                  buildingContext.reset();
+                  setSelectedNutzung(null);
                   setDrawMode(true);
                 }}
                 onFinish={handleFinishDraw}
@@ -651,6 +776,62 @@ export default function HomePage() {
               </div>
             </div>
           ) : null}
+
+          {selectedNutzung ? (
+            <div className="pointer-events-none absolute bottom-4 right-4 z-10 w-[360px]">
+              <div className="glass-panel pointer-events-auto rounded-xl p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-cyan-300">ALKIS Nutzung</h3>
+                    <div
+                      className="mt-1 inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-base font-semibold"
+                      style={{
+                        backgroundColor: `${nutzungCategoryColor(selectedNutzung.properties.nutzart)}33`,
+                        color: nutzungCategoryColor(selectedNutzung.properties.nutzart),
+                        border: `1px solid ${nutzungCategoryColor(selectedNutzung.properties.nutzart)}66`,
+                      }}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: nutzungCategoryColor(selectedNutzung.properties.nutzart) }}
+                      />
+                      {displayValue(selectedNutzung.properties.nutzart)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNutzung(null)}
+                    className="rounded bg-white/10 px-2 py-1 text-[10px] text-slate-200 hover:bg-white/20"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="space-y-1 rounded border border-white/10 bg-white/[0.02] p-2 text-[11px] text-slate-300">
+                  <div><span className="font-medium text-slate-400">OID:</span> {displayValue(selectedNutzung.properties.oid ?? selectedNutzung.id)}</div>
+                  <div><span className="font-medium text-slate-400">Aktualität:</span> {displayValue(selectedNutzung.properties.aktualit)}</div>
+                  <div><span className="font-medium text-slate-400">Bezeichnung:</span> {displayValue(selectedNutzung.properties.bez)}</div>
+                  <div><span className="font-medium text-slate-400">Name:</span> {displayValue(selectedNutzung.properties.name)}</div>
+                </div>
+
+                <details className="mt-2 rounded border border-white/10 bg-white/[0.02] p-2">
+                  <summary className="cursor-pointer text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    Weitere Attribute
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    {Object.entries(selectedNutzung.properties)
+                      .filter(([key]) => !["oid", "aktualit", "nutzart", "bez", "name"].includes(key))
+                      .map(([key, value]) => (
+                        <div key={key} className="flex items-start justify-between gap-2 text-[10px]">
+                          <span className="text-slate-500">{key}</span>
+                          <span className="text-right text-slate-300">{displayValue(value)}</span>
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div
@@ -723,6 +904,11 @@ export default function HomePage() {
                 showBuildings={useDrawnView ? buildingsVisible : buildingsAvailable}
                 showVulnerability={useDrawnView ? censusVisible : censusAvailable}
                 showTrees={useDrawnView ? treesAvailable : treesAvailable}
+                showLandUse={useDrawnView ? nutzungVisible : nutzungAvailable}
+                landUse={landUseResult}
+                landUsePending={landUsePending}
+                landUseError={landUseError}
+                totalAreaHectares={totalAreaHectares}
                 visibleLayerIds={visibleRasterLayerIds}
               />
             </div>

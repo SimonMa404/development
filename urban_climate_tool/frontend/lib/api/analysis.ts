@@ -10,6 +10,8 @@ import type {
   BuildingOverviewResponse,
   TreeStatisticsRequest,
   TreeStatisticsResponse,
+  LandUseCompositionRequest,
+  LandUseCompositionResponse,
 } from "@/types/analysis";
 
 export async function fetchAreaStatistics(request: AreaStatisticsRequest): Promise<AreaStatisticsResponse> {
@@ -30,4 +32,8 @@ export async function fetchBuildingsOverview(request: BuildingOverviewRequest): 
 
 export async function fetchHeatVulnerability(request: HeatVulnerabilityRequest): Promise<HeatVulnerabilityResponse> {
   return postJson<HeatVulnerabilityResponse, HeatVulnerabilityRequest>("/api/analysis/heat-vulnerability", request);
+}
+
+export async function fetchLandUseComposition(request: LandUseCompositionRequest): Promise<LandUseCompositionResponse> {
+  return postJson<LandUseCompositionResponse, LandUseCompositionRequest>("/api/analysis/land-use-composition", request);
 }
