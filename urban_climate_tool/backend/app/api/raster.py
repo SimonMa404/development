@@ -27,7 +27,9 @@ def get_raster_tile(layer_id: str, z: int, x: int, y: int) -> Response:
         content=tile_bytes,
         media_type=content_type,
         headers={
-            "Cache-Control": "public, max-age=3600",
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
             "X-Content-Type-Options": "nosniff",
         },
     )

@@ -5,7 +5,7 @@ Convert tree data for Planegg into a mixed-geometry GeoJSON.
 For each tree inside the Planegg boundary this script writes:
 - one Point feature for clean 2D rendering,
 - one small Polygon for the trunk,
-- one larger Polygon for the canopy.
+- three canopy shell polygons (lower/mid/upper) for a rounder 3D crown.
 """
 
 import json
@@ -14,6 +14,22 @@ from pathlib import Path
 import fiona
 import geopandas as gpd
 import pandas as pd
+
+
+def _round_coords(value, digits: int = 6):
+    if isinstance(value, (list, tuple)):
+        return [_round_coords(item, digits) for item in value]
+    if isinstance(value, float):
+        return round(value, digits)
+    return value
+
+
+def compact_geometry(geometry) -> dict:
+    geo = geometry.__geo_interface__
+    return {
+        "type": geo["type"],
+        "coordinates": _round_coords(geo["coordinates"], 6),
+    }
 
 def main():
     gpkg_path = Path('/app/data/124028_baeume.gpkg')
@@ -62,11 +78,19 @@ def main():
 
             centroids_wgs84 = gpd.GeoSeries(gdf.geometry, crs='EPSG:25832').to_crs('EPSG:4326')
             trunks_wgs84 = gpd.GeoSeries(
-                [geom.buffer(radius, resolution=6) for geom, radius in zip(gdf.geometry, trunk_radii)],
+                [geom.buffer(radius, resolution=4) for geom, radius in zip(gdf.geometry, trunk_radii)],
                 crs='EPSG:25832',
             ).to_crs('EPSG:4326')
-            canopies_wgs84 = gpd.GeoSeries(
-                [geom.buffer(radius, resolution=8) for geom, radius in zip(gdf.geometry, canopy_radii)],
+            canopy_lower_wgs84 = gpd.GeoSeries(
+                [geom.buffer(radius * 0.92, resolution=6) for geom, radius in zip(gdf.geometry, canopy_radii)],
+                crs='EPSG:25832',
+            ).to_crs('EPSG:4326')
+            canopy_mid_wgs84 = gpd.GeoSeries(
+                [geom.buffer(radius, resolution=6) for geom, radius in zip(gdf.geometry, canopy_radii)],
+                crs='EPSG:25832',
+            ).to_crs('EPSG:4326')
+            canopy_upper_wgs84 = gpd.GeoSeries(
+                [geom.buffer(radius * 0.62, resolution=6) for geom, radius in zip(gdf.geometry, canopy_radii)],
                 crs='EPSG:25832',
             ).to_crs('EPSG:4326')
 
@@ -79,7 +103,9 @@ def main():
 
                 centroid_wgs84 = centroids_wgs84.iloc[pos]
                 trunk_wgs84 = trunks_wgs84.iloc[pos]
-                canopy_wgs84 = canopies_wgs84.iloc[pos]
+                canopy_lower_geom = canopy_lower_wgs84.iloc[pos]
+                canopy_mid_geom = canopy_mid_wgs84.iloc[pos]
+                canopy_upper_geom = canopy_upper_wgs84.iloc[pos]
 
                 tree_id = f"{layer_name}:{int(row.get('ID', idx)) if pd.notna(row.get('ID')) else idx}"
 
@@ -92,20 +118,11 @@ def main():
                     "canopy_base": canopy_base,
                 }
 
-                for col in row.index:
-                    if col != 'geometry' and col not in properties and col != 'ID':
-                        val = row[col]
-                        if pd.notna(val):
-                            try:
-                                properties[col] = float(val) if isinstance(val, (int, float)) else str(val)
-                            except Exception:
-                                pass
-
                 point_feature = {
                     "type": "Feature",
                     "geometry": {
                         "type": "Point",
-                        "coordinates": [float(centroid_wgs84.x), float(centroid_wgs84.y)],
+                        "coordinates": [round(float(centroid_wgs84.x), 6), round(float(centroid_wgs84.y), 6)],
                     },
                     "properties": {
                         **properties,
@@ -115,23 +132,55 @@ def main():
 
                 trunk_feature = {
                     "type": "Feature",
-                    "geometry": trunk_wgs84.__geo_interface__,
+                    "geometry": compact_geometry(trunk_wgs84),
                     "properties": {
                         **properties,
                         "tree_part": "trunk",
                     },
                 }
 
-                canopy_feature = {
+                canopy_span = max(2.0, tree_height - canopy_base)
+                lower_base = canopy_base
+                lower_top = lower_base + canopy_span * 0.52
+                mid_base = canopy_base + canopy_span * 0.18
+                mid_top = canopy_base + canopy_span * 0.82
+                upper_base = canopy_base + canopy_span * 0.42
+                upper_top = tree_height
+
+                canopy_lower_feature = {
                     "type": "Feature",
-                    "geometry": canopy_wgs84.__geo_interface__,
+                    "geometry": compact_geometry(canopy_lower_geom),
                     "properties": {
                         **properties,
-                        "tree_part": "canopy",
+                        "tree_part": "canopy_lower",
+                        "canopy_shell_base": lower_base,
+                        "canopy_shell_top": lower_top,
                     },
                 }
 
-                all_features.extend([point_feature, trunk_feature, canopy_feature])
+                canopy_mid_feature = {
+                    "type": "Feature",
+                    "geometry": compact_geometry(canopy_mid_geom),
+                    "properties": {
+                        **properties,
+                        "tree_part": "canopy_mid",
+                        "canopy_shell_base": mid_base,
+                        "canopy_shell_top": mid_top,
+                    },
+                }
+
+                canopy_upper_feature = {
+                    "type": "Feature",
+                    "geometry": compact_geometry(canopy_upper_geom),
+                    "properties": {
+                        **properties,
+                        "tree_part": "canopy_upper",
+                        "canopy_shell_base": upper_base,
+                        "canopy_shell_top": upper_top,
+                    },
+                }
+
+                all_features.extend([point_feature, trunk_feature, canopy_lower_feature, canopy_mid_feature, canopy_upper_feature])
             
             total_loaded += len(gdf)
 
@@ -149,7 +198,7 @@ def main():
     }
 
     with open(output_path, 'w') as f:
-        json.dump(geojson, f)
+        json.dump(geojson, f, separators=(",", ":"))
 
     file_size = output_path.stat().st_size / 1024 / 1024
     print(f"Done! File size: {file_size:.1f} MB")

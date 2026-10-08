@@ -62,6 +62,9 @@ class RasterService:
             "rasters/processed/planegg/dom_terrain_1m_cog.tif",
             "rasters/processed/planegg/dom_20cm.tif",
         ),
+        "dsm": (
+            "rasters/derived/planegg/dsm_1m.tif",
+        ),
     }
 
     def __init__(self, catalog_service: CatalogService | None = None):
@@ -93,6 +96,9 @@ class RasterService:
         is_categorical = layer.value_type == "categorical"
         is_rgb = layer.value_type == "rgb" or (layer.style and layer.style.color_scale == "rgb")
         is_relative_summer_lst = layer.temporal_group == "relative_summer_lst"
+        thematic_group = (layer.thematic_group or "").strip().lower()
+        is_shade_layer = thematic_group in {"shade", "shade & solar"} or layer.id.startswith(("sun-hours-", "shade-hours-", "shade-fraction-"))
+        is_dsm_overlay = layer.id == "dsm-planegg"
 
         try:
             with Reader(path) as reader:
@@ -102,7 +108,7 @@ class RasterService:
                     interpolation = (layer.style.interpolation if layer.style else "") or ""
                     if is_relative_summer_lst:
                         image = reader.tile(x, y, z, resampling_method="nearest", nodata=None)
-                    elif interpolation.lower() == "nearest":
+                    elif interpolation.lower() == "nearest" or is_shade_layer:
                         image = reader.tile(x, y, z, resampling_method="nearest")
                     else:
                         image = reader.tile(x, y, z)
@@ -168,16 +174,37 @@ class RasterService:
             colormap = _build_categorical_colormap(palette)
             png_bytes = image.render(img_format="PNG", colormap=colormap)
         else:
-            if is_relative_summer_lst and "planegg" in layer.id:
+            aoi_mask: np.ndarray | None = None
+            if is_relative_summer_lst or is_shade_layer or is_dsm_overlay:
                 aoi_mask = self._planegg_aoi_mask_for_tile(image)
-                if aoi_mask is not None:
-                    image.mask = np.where(aoi_mask, 255, 0).astype(np.uint8)
 
             vmin = layer.value_range.minimum if layer.value_range else 0
             vmax = layer.value_range.maximum if layer.value_range else 1
             image.rescale(in_range=((vmin, vmax),))
             colormap = _build_continuous_colormap(palette)
-            png_bytes = image.render(img_format="PNG", colormap=colormap)
+
+            if aoi_mask is None:
+                png_bytes = image.render(img_format="PNG", colormap=colormap)
+            else:
+                values = np.nan_to_num(image.data[0], nan=0.0)
+                values = np.clip(values, 0, 255).astype(np.uint8)
+
+                if image.mask is not None:
+                    base_mask = image.mask
+                    if base_mask.ndim == 3:
+                        base_mask = base_mask[0]
+                    valid_mask = (base_mask > 0) & aoi_mask
+                else:
+                    valid_mask = np.isfinite(image.data[0]) & aoi_mask
+
+                lut = np.zeros((256, 4), dtype=np.uint8)
+                for idx in range(256):
+                    lut[idx] = colormap[idx]
+
+                rgba_hw = lut[values]
+                rgba_hw[..., 3] = np.where(valid_mask, rgba_hw[..., 3], 0).astype(np.uint8)
+                rgba = np.transpose(rgba_hw, (2, 0, 1))
+                png_bytes = self._encode_rgba_png(rgba)
 
         return png_bytes, "image/png"
 

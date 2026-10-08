@@ -64,7 +64,7 @@ const NUTZUNG_COLOR_MATCH_EXPRESSION: any = [
 ];
 
 export type BasemapId = "satellite" | "hybrid" | "dark";
-export type TerrainSourceId = "dem" | "dom";
+export type TerrainSourceId = "dem" | "dom" | "dsm";
 
 type ClickedVectorFeature = {
   id: string;
@@ -170,7 +170,7 @@ export function MapCanvas({
   terrain3dEnabled = false,
   terrainSource = "dem",
   terrainAvailable = false,
-  terrainSourcesAvailable = { dem: true, dom: true },
+  terrainSourcesAvailable = { dem: true, dom: true, dsm: true },
   terrainExaggeration = 1.8,
   hillshadeStrength = 0.7,
   selectedBuildingId = null,
@@ -216,20 +216,21 @@ export function MapCanvas({
   swipeLeftLabel?: string;
   swipeRightLabel?: string;
   terrainOffIntentVersion?: number;
-  onEffectiveTerrainModeChange?: (mode: "off" | "dem" | "dom") => void;
+  onEffectiveTerrainModeChange?: (mode: "off" | "dem" | "dom" | "dsm") => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapRef>(null);
   const compareMapRef = useRef<MapRef>(null);
-  const previousTerrainModeRef = useRef<"off" | "dem" | "dom">("off");
+  const previousTerrainModeRef = useRef<"off" | "dem" | "dom" | "dsm">("off");
   const previousOffIntentVersionRef = useRef<number>(terrainOffIntentVersion);
   const preTerrainViewRef = useRef<{ longitude: number; latitude: number; zoom: number; bearing: number } | null>(null);
   const [viewState, setViewState] = useState(PLANEGG_CENTER);
   const [bearing, setBearing] = useState(0);
   const [terrainRevision, setTerrainRevision] = useState(0);
+  const [tileVersion] = useState(() => Date.now());
   const [isDraggingSwipe, setIsDraggingSwipe] = useState(false);
-  const [effectiveTerrainMode, setEffectiveTerrainMode] = useState<"off" | "dem" | "dom">("off");
-  const domMode = effectiveTerrainMode === "dom";
+  const [effectiveTerrainMode, setEffectiveTerrainMode] = useState<"off" | "dem" | "dom" | "dsm">("off");
+  const domMode = effectiveTerrainMode === "dom" || effectiveTerrainMode === "dsm";
   const terrainSourceId = `terrain-${terrainSource}`;
 
   const swipeIsActive = Boolean(swipeEnabled && swipeLeftLayerId && swipeRightLayerId && swipeLeftLayerId !== swipeRightLayerId);
@@ -439,10 +440,10 @@ export function MapCanvas({
     if (!map) return;
 
       const sourceAvailable = Boolean(terrainSourcesAvailable[terrainSource]);
-      const nextDomMode = terrainSource === "dom";
+      const nextDomMode = terrainSource === "dom" || terrainSource === "dsm";
       const effectiveExaggeration = nextDomMode ? 1 : terrainExaggeration;
       const wantsTerrain = terrain3dEnabled && terrainAvailable && sourceAvailable;
-      const nextTerrainMode: "off" | "dem" | "dom" = wantsTerrain ? terrainSource : "off";
+      const nextTerrainMode: "off" | "dem" | "dom" | "dsm" = wantsTerrain ? terrainSource : "off";
       const previousTerrainMode = previousTerrainModeRef.current;
       const modeChanged = previousTerrainMode !== nextTerrainMode;
 
@@ -475,11 +476,11 @@ export function MapCanvas({
         if (modeChanged && effectiveExaggeration > 0) {
           const currentZoom = map.getZoom();
           const zoomLiftFactor = Math.max(1, Math.min(4, Math.pow(1.28, Math.max(0, currentZoom - 13))));
-          const pitchTarget = nextTerrainMode === "dom" ? 50 : (currentZoom >= 16 ? 40 : 45);
+          const pitchTarget = nextDomMode ? 50 : (currentZoom >= 16 ? 40 : 45);
           const baseZoomTarget = currentZoom >= 16 ? currentZoom - 0.45 : currentZoom >= 15 ? currentZoom - 0.25 : currentZoom;
-          const heightDeltaCompensation = previousTerrainMode === "dom" && nextTerrainMode === "dem"
+          const heightDeltaCompensation = (previousTerrainMode === "dom" || previousTerrainMode === "dsm") && nextTerrainMode === "dem"
             ? -0.15
-            : previousTerrainMode === "dem" && nextTerrainMode === "dom"
+            : previousTerrainMode === "dem" && nextDomMode
               ? 0.1
               : 0;
           const zoomTarget = baseZoomTarget + heightDeltaCompensation;
@@ -594,7 +595,7 @@ export function MapCanvas({
         <Source
           id="terrain-dem"
           type="raster-dem"
-          tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dem`]}
+          tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dem&v=${tileVersion}`]}
           tileSize={256}
           encoding="terrarium"
           maxzoom={14}
@@ -603,10 +604,19 @@ export function MapCanvas({
         <Source
           id="terrain-dom"
           type="raster-dem"
-          tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dom`]}
+          tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dom&v=${tileVersion}`]}
           tileSize={256}
           encoding="terrarium"
           maxzoom={13}
+        />
+
+        <Source
+          id="terrain-dsm"
+          type="raster-dem"
+          tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dsm&v=${tileVersion}`]}
+          tileSize={256}
+          encoding="terrarium"
+          maxzoom={14}
         />
 
         {effectiveTerrainMode === "dem" ? (
@@ -632,7 +642,7 @@ export function MapCanvas({
                 key={layer.id}
                 id={layer.id}
                 type="raster"
-                tiles={[`${apiBaseUrl}/api/tiles/${layer.id}/{z}/{x}/{y}.png`]}
+                tiles={[`${apiBaseUrl}/api/tiles/${layer.id}/{z}/{x}/{y}.png?v=${tileVersion}`]}
                 tileSize={256}
               >
                 <Layer
@@ -660,7 +670,7 @@ export function MapCanvas({
 
             if (layer.style?.color_scale === "buildings3d") {
               const buildingsUrl = `${apiBaseUrl}/api/vectors/${layer.id}`;
-              const modeSuffix = domMode ? "2d" : "3d";
+              const modeSuffix = "3d";
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const extrusionHeightExpr: any = [
                 "coalesce",
@@ -679,53 +689,6 @@ export function MapCanvas({
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const selectedExtrusionHeightExpr: any = ["+", extrusionHeightExpr, 0.5];
-              
-              if (domMode) {
-                return (
-                  <Source key={`${layer.id}-${modeSuffix}`} id={layer.id} type="geojson" data={buildingsUrl}>
-                    <Layer
-                      id={`${layer.id}-fill-2d`}
-                      type="fill"
-                      paint={{
-                        "fill-color": color,
-                        "fill-opacity": Math.max(0.12, layer.default_opacity * 0.25),
-                      }}
-                    />
-                    <Layer
-                      id={`${layer.id}-outline-2d`}
-                      type="line"
-                      paint={{
-                        "line-color": "#d1d5db",
-                        "line-width": 0.8,
-                        "line-opacity": 0.9,
-                      }}
-                    />
-                    {selectedBuildingId ? (
-                      <Layer
-                        id={`${layer.id}-selected-fill`}
-                        type="fill"
-                        filter={["==", ["to-string", ["get", "id"]], selectedBuildingId]}
-                        paint={{
-                          "fill-color": "#fde047",
-                          "fill-opacity": 0.45,
-                        }}
-                      />
-                    ) : null}
-                    {selectedBuildingId ? (
-                      <Layer
-                        id={`${layer.id}-selected-outline`}
-                        type="line"
-                        filter={["==", ["to-string", ["get", "id"]], selectedBuildingId]}
-                        paint={{
-                          "line-color": "#fde047",
-                          "line-width": 3,
-                          "line-opacity": 1,
-                        }}
-                      />
-                    ) : null}
-                  </Source>
-                );
-              }
 
               return (
                 <Source key={`${layer.id}-${modeSuffix}`} id={layer.id} type="geojson" data={buildingsUrl}>
@@ -783,45 +746,17 @@ export function MapCanvas({
             if (layer.style?.color_scale === "trees3d") {
               const treeGreen = "#16a34a";
               const treeGreenDark = "#15803d";
+              const treeGreenLight = "#22c55e";
               const trunkBrown = "#6b4f2a";
-              const modeSuffix = domMode ? "2d" : "3d";
-              
-              if (domMode) {
-                return (
-                  <Source
-                    key={`${layer.id}-${modeSuffix}`}
-                    id={layer.id}
-                    type="geojson"
-                    data={`${apiBaseUrl}/api/vectors/${layer.id}`}
-                  >
-                    <Layer
-                      id={`${layer.id}-halo`}
-                      type="circle"
-                      minzoom={11}
-                      filter={["==", ["get", "tree_part"], "point"]}
-                      paint={{
-                        "circle-color": treeGreen,
-                        "circle-opacity": 0.16,
-                        "circle-stroke-color": treeGreenDark,
-                        "circle-stroke-opacity": 0.28,
-                        "circle-stroke-width": 1,
-                        "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 4, 14, 7, 17, 11],
-                      }}
-                    />
-                    <Layer
-                      id={`${layer.id}-point`}
-                      type="circle"
-                      minzoom={11}
-                      filter={["==", ["get", "tree_part"], "point"]}
-                      paint={{
-                        "circle-color": treeGreenDark,
-                        "circle-opacity": layer.default_opacity,
-                        "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 1.1, 14, 1.8, 17, 2.7],
-                      }}
-                    />
-                  </Source>
-                );
-              }
+              const modeSuffix = "3d";
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const canopyBaseExpr: any = ["coalesce", ["to-number", ["get", "canopy_base"]], 1.5];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const canopyTopExpr: any = ["coalesce", ["to-number", ["get", "height"]], 12];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const canopyShellBaseExpr: any = ["coalesce", ["to-number", ["get", "canopy_shell_base"]], canopyBaseExpr];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const canopyShellTopExpr: any = ["coalesce", ["to-number", ["get", "canopy_shell_top"]], canopyTopExpr];
 
               return (
                 <Source
@@ -855,15 +790,45 @@ export function MapCanvas({
                     }}
                   />
                   <Layer
-                    id={`${layer.id}-canopy`}
+                    id={`${layer.id}-canopy-lower`}
                     type="fill-extrusion"
                     minzoom={12}
-                    filter={["==", ["get", "tree_part"], "canopy"]}
+                    filter={[
+                      "any",
+                      ["==", ["get", "tree_part"], "canopy"],
+                      ["==", ["get", "tree_part"], "canopy_lower"],
+                    ]}
                     paint={{
                       "fill-extrusion-color": treeGreen,
-                      "fill-extrusion-height": ["coalesce", ["to-number", ["get", "height"]], 12],
-                      "fill-extrusion-base": ["coalesce", ["to-number", ["get", "canopy_base"]], 1.5],
-                      "fill-extrusion-opacity": Math.max(0.7, layer.default_opacity * 0.88),
+                      "fill-extrusion-height": canopyShellTopExpr,
+                      "fill-extrusion-base": canopyShellBaseExpr,
+                      "fill-extrusion-opacity": Math.max(0.68, layer.default_opacity * 0.82),
+                      "fill-extrusion-vertical-gradient": true,
+                    }}
+                  />
+                  <Layer
+                    id={`${layer.id}-canopy-mid`}
+                    type="fill-extrusion"
+                    minzoom={12}
+                    filter={["==", ["get", "tree_part"], "canopy_mid"]}
+                    paint={{
+                      "fill-extrusion-color": "#1fb857",
+                      "fill-extrusion-height": canopyShellTopExpr,
+                      "fill-extrusion-base": canopyShellBaseExpr,
+                      "fill-extrusion-opacity": Math.max(0.58, layer.default_opacity * 0.74),
+                      "fill-extrusion-vertical-gradient": true,
+                    }}
+                  />
+                  <Layer
+                    id={`${layer.id}-canopy-top`}
+                    type="fill-extrusion"
+                    minzoom={12}
+                    filter={["==", ["get", "tree_part"], "canopy_upper"]}
+                    paint={{
+                      "fill-extrusion-color": treeGreenLight,
+                      "fill-extrusion-height": canopyShellTopExpr,
+                      "fill-extrusion-base": canopyShellBaseExpr,
+                      "fill-extrusion-opacity": Math.max(0.5, layer.default_opacity * 0.66),
                       "fill-extrusion-vertical-gradient": true,
                     }}
                   />
@@ -871,7 +836,13 @@ export function MapCanvas({
                     id={`${layer.id}-canopy-outline`}
                     type="line"
                     minzoom={12}
-                    filter={["==", ["get", "tree_part"], "canopy"]}
+                    filter={[
+                      "any",
+                      ["==", ["get", "tree_part"], "canopy"],
+                      ["==", ["get", "tree_part"], "canopy_lower"],
+                      ["==", ["get", "tree_part"], "canopy_mid"],
+                      ["==", ["get", "tree_part"], "canopy_upper"],
+                    ]}
                     paint={{
                       "line-color": treeGreenDark,
                       "line-width": 0.45,
@@ -1104,7 +1075,7 @@ export function MapCanvas({
               key={`swipe-source-${swipeRightLayer.id}`}
               id="swipe-compare-raster"
               type="raster"
-              tiles={[`${apiBaseUrl}/api/tiles/${swipeRightLayer.id}/{z}/{x}/{y}.png`]}
+              tiles={[`${apiBaseUrl}/api/tiles/${swipeRightLayer.id}/{z}/{x}/{y}.png?v=${tileVersion}`]}
               tileSize={256}
             >
               <Layer
@@ -1126,45 +1097,17 @@ export function MapCanvas({
               .map((layer) => {
                 const treeGreen = "#16a34a";
                 const treeGreenDark = "#15803d";
+                const treeGreenLight = "#22c55e";
                 const trunkBrown = "#6b4f2a";
-                const modeSuffix = domMode ? "2d" : "3d";
-
-                if (domMode) {
-                  return (
-                    <Source
-                      key={`swipe-${layer.id}-${modeSuffix}`}
-                      id={`swipe-${layer.id}`}
-                      type="geojson"
-                      data={`${apiBaseUrl}/api/vectors/${layer.id}`}
-                    >
-                      <Layer
-                        id={`swipe-${layer.id}-halo`}
-                        type="circle"
-                        minzoom={11}
-                        filter={["==", ["get", "tree_part"], "point"]}
-                        paint={{
-                          "circle-color": treeGreen,
-                          "circle-opacity": 0.16,
-                          "circle-stroke-color": treeGreenDark,
-                          "circle-stroke-opacity": 0.28,
-                          "circle-stroke-width": 1,
-                          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 4, 14, 7, 17, 11],
-                        }}
-                      />
-                      <Layer
-                        id={`swipe-${layer.id}-point`}
-                        type="circle"
-                        minzoom={11}
-                        filter={["==", ["get", "tree_part"], "point"]}
-                        paint={{
-                          "circle-color": treeGreenDark,
-                          "circle-opacity": layer.default_opacity,
-                          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 1.1, 14, 1.8, 17, 2.7],
-                        }}
-                      />
-                    </Source>
-                  );
-                }
+                const modeSuffix = "3d";
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const canopyBaseExpr: any = ["coalesce", ["to-number", ["get", "canopy_base"]], 1.5];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const canopyTopExpr: any = ["coalesce", ["to-number", ["get", "height"]], 12];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const canopyShellBaseExpr: any = ["coalesce", ["to-number", ["get", "canopy_shell_base"]], canopyBaseExpr];
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const canopyShellTopExpr: any = ["coalesce", ["to-number", ["get", "canopy_shell_top"]], canopyTopExpr];
 
                 return (
                   <Source
@@ -1198,15 +1141,45 @@ export function MapCanvas({
                       }}
                     />
                     <Layer
-                      id={`swipe-${layer.id}-canopy`}
+                      id={`swipe-${layer.id}-canopy-lower`}
                       type="fill-extrusion"
                       minzoom={12}
-                      filter={["==", ["get", "tree_part"], "canopy"]}
+                      filter={[
+                        "any",
+                        ["==", ["get", "tree_part"], "canopy"],
+                        ["==", ["get", "tree_part"], "canopy_lower"],
+                      ]}
                       paint={{
                         "fill-extrusion-color": treeGreen,
-                        "fill-extrusion-height": ["coalesce", ["to-number", ["get", "height"]], 12],
-                        "fill-extrusion-base": ["coalesce", ["to-number", ["get", "canopy_base"]], 1.5],
+                        "fill-extrusion-height": canopyShellTopExpr,
+                        "fill-extrusion-base": canopyShellBaseExpr,
                         "fill-extrusion-opacity": Math.max(0.7, layer.default_opacity * 0.88),
+                        "fill-extrusion-vertical-gradient": true,
+                      }}
+                    />
+                    <Layer
+                      id={`swipe-${layer.id}-canopy-mid`}
+                      type="fill-extrusion"
+                      minzoom={12}
+                      filter={["==", ["get", "tree_part"], "canopy_mid"]}
+                      paint={{
+                        "fill-extrusion-color": "#1fb857",
+                        "fill-extrusion-height": canopyShellTopExpr,
+                        "fill-extrusion-base": canopyShellBaseExpr,
+                        "fill-extrusion-opacity": Math.max(0.58, layer.default_opacity * 0.74),
+                        "fill-extrusion-vertical-gradient": true,
+                      }}
+                    />
+                    <Layer
+                      id={`swipe-${layer.id}-canopy-top`}
+                      type="fill-extrusion"
+                      minzoom={12}
+                      filter={["==", ["get", "tree_part"], "canopy_upper"]}
+                      paint={{
+                        "fill-extrusion-color": treeGreenLight,
+                        "fill-extrusion-height": canopyShellTopExpr,
+                        "fill-extrusion-base": canopyShellBaseExpr,
+                        "fill-extrusion-opacity": Math.max(0.5, layer.default_opacity * 0.66),
                         "fill-extrusion-vertical-gradient": true,
                       }}
                     />
@@ -1214,7 +1187,13 @@ export function MapCanvas({
                       id={`swipe-${layer.id}-canopy-outline`}
                       type="line"
                       minzoom={12}
-                      filter={["==", ["get", "tree_part"], "canopy"]}
+                      filter={[
+                        "any",
+                        ["==", ["get", "tree_part"], "canopy"],
+                        ["==", ["get", "tree_part"], "canopy_lower"],
+                        ["==", ["get", "tree_part"], "canopy_mid"],
+                        ["==", ["get", "tree_part"], "canopy_upper"],
+                      ]}
                       paint={{
                         "line-color": treeGreenDark,
                         "line-width": 0.45,

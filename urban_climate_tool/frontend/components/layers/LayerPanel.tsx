@@ -44,9 +44,11 @@ export function LayerPanel({
   const groupedLayers = useMemo(() => {
     const groups: Array<{ key: string; title: string; layers: CatalogLayer[] }> = [
       { key: "overlays", title: "Overlays & Boundary", layers: [] },
+      { key: "terrain", title: "Terrain", layers: [] },
       { key: "rgb", title: "RGB Imagery", layers: [] },
       { key: "lulc", title: "LULC", layers: [] },
       { key: "temperature", title: "Temperature", layers: [] },
+      { key: "shade", title: "Shade & Solar", layers: [] },
       { key: "vegetation", title: "Vegetation", layers: [] },
       { key: "info", title: "Info (Census & ALKIS)", layers: [] },
       { key: "other", title: "Other Layers", layers: [] },
@@ -66,6 +68,16 @@ export function LayerPanel({
         id.includes("boundary")
       ) {
         return "overlays";
+      }
+      if (
+        scale === "elevation" ||
+        id.includes("dsm") ||
+        id.includes("dem") ||
+        id.includes("dom") ||
+        thematic.includes("terrain") ||
+        tags.includes("terrain")
+      ) {
+        return "terrain";
       }
       if (layer.value_type === "rgb" || scale === "rgb" || tags.includes("sentinel-rgb") || id.includes("rgb")) {
         return "rgb";
@@ -88,6 +100,16 @@ export function LayerPanel({
         thematic.includes("heat")
       ) {
         return "temperature";
+      }
+      if (
+        tags.includes("shade") ||
+        tags.includes("solar") ||
+        id.includes("shade") ||
+        id.includes("sun-hours") ||
+        thematic.includes("shade") ||
+        thematic.includes("solar")
+      ) {
+        return "shade";
       }
       if (
         id.includes("census") ||

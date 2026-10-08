@@ -109,7 +109,7 @@ type DrawnPolygonGeometry = {
   coordinates: number[][][];
 };
 type SwipeLayerSelection = "from-rgb" | "to-rgb" | "from-lulc" | "to-lulc";
-type EffectiveTerrainMode = "off" | "dem" | "dom";
+type EffectiveTerrainMode = "off" | "dem" | "dom" | "dsm";
 const LEGACY_LULC_LAYER_ID = "lulc-planegg";
 
 export default function HomePage() {
@@ -126,7 +126,7 @@ export default function HomePage() {
   const [effectiveTerrainMode, setEffectiveTerrainMode] = useState<EffectiveTerrainMode>("off");
   const [terrainOffIntentVersion, setTerrainOffIntentVersion] = useState(0);
   const [terrainAvailable, setTerrainAvailable] = useState(true);
-  const [terrainSourcesAvailable, setTerrainSourcesAvailable] = useState<Record<TerrainSourceId, boolean>>({ dem: true, dom: true });
+  const [terrainSourcesAvailable, setTerrainSourcesAvailable] = useState<Record<TerrainSourceId, boolean>>({ dem: true, dom: true, dsm: true });
   const [terrainExaggeration, setTerrainExaggeration] = useState(1.8);
   const [hillshadeStrength, setHillshadeStrength] = useState(0.7);
   const [layersPanelOpen, setLayersPanelOpen] = useState(true);
@@ -175,7 +175,8 @@ export default function HomePage() {
   const [activeLayerOrder, setActiveLayerOrder] = useState<string[]>([]);
   const [draggingActiveLayerId, setDraggingActiveLayerId] = useState<string | null>(null);
   const [activeDropTargetId, setActiveDropTargetId] = useState<string | null>(null);
-  const domTerrainMode = effectiveTerrainMode === "dom";
+  const domTerrainMode = effectiveTerrainMode === "dom" || effectiveTerrainMode === "dsm";
+  const hasAnyTerrainSource = terrainSourcesAvailable.dem || terrainSourcesAvailable.dom || terrainSourcesAvailable.dsm;
 
   const areaStatistics = useAreaStatistics();
   const buildingContext = useMutation<BuildingContextResponse, Error, { geometry: Record<string, unknown>; layer_ids: string[] }>({
@@ -1008,6 +1009,7 @@ export default function HomePage() {
           setTerrainSourcesAvailable({
             dem: Boolean(payload.sources?.dem),
             dom: Boolean(payload.sources?.dom),
+            dsm: Boolean(payload.sources?.dsm),
           });
         })
         .catch(() => {
@@ -1032,11 +1034,17 @@ export default function HomePage() {
   }, [terrainSource]);
 
   useEffect(() => {
-    if (terrainSource === "dem" && !terrainSourcesAvailable.dem && terrainSourcesAvailable.dom) {
-      setTerrainSource("dom");
+    if (terrainSource === "dem" && !terrainSourcesAvailable.dem) {
+      if (terrainSourcesAvailable.dom) setTerrainSource("dom");
+      else if (terrainSourcesAvailable.dsm) setTerrainSource("dsm");
     }
-    if (terrainSource === "dom" && !terrainSourcesAvailable.dom && terrainSourcesAvailable.dem) {
-      setTerrainSource("dem");
+    if (terrainSource === "dom" && !terrainSourcesAvailable.dom) {
+      if (terrainSourcesAvailable.dem) setTerrainSource("dem");
+      else if (terrainSourcesAvailable.dsm) setTerrainSource("dsm");
+    }
+    if (terrainSource === "dsm" && !terrainSourcesAvailable.dsm) {
+      if (terrainSourcesAvailable.dem) setTerrainSource("dem");
+      else if (terrainSourcesAvailable.dom) setTerrainSource("dom");
     }
   }, [terrainSource, terrainSourcesAvailable]);
 
@@ -1399,29 +1407,29 @@ export default function HomePage() {
             type="button"
             role="switch"
             aria-checked={terrain3dEnabled}
-            disabled={!terrainSourcesAvailable.dem && !terrainSourcesAvailable.dom}
+            disabled={!hasAnyTerrainSource}
             onClick={handleToggleTerrain3d}
             className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition ${
-              terrainSourcesAvailable.dem || terrainSourcesAvailable.dom
+              hasAnyTerrainSource
                 ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/15"
                 : "cursor-not-allowed border-white/10 bg-white/5 text-slate-500"
             }`}
-            title={(terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? "Toggle 3D terrain mode" : "No terrain source available. Import DEM/DOM first."}
+            title={hasAnyTerrainSource ? "Toggle 3D terrain mode" : "No terrain source available. Import DEM, DOM, or DSM first."}
           >
             <span
               className={`relative h-4 w-8 shrink-0 rounded-full transition ${
-                terrain3dEnabled && (terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? "bg-cyan-400" : "bg-slate-700"
+                terrain3dEnabled && hasAnyTerrainSource ? "bg-cyan-400" : "bg-slate-700"
               }`}
             >
               <span
                 className={`absolute top-0.5 h-3 w-3 rounded-full bg-slate-950 transition ${
-                  terrain3dEnabled && (terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? "left-4" : "left-0.5"
+                  terrain3dEnabled && hasAnyTerrainSource ? "left-4" : "left-0.5"
                 }`}
               />
             </span>
             3D Terrain
           </button>
-          {terrain3dEnabled && (terrainSourcesAvailable.dem || terrainSourcesAvailable.dom) ? (
+          {terrain3dEnabled && hasAnyTerrainSource ? (
             <div className="hidden items-center gap-3 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 sm:flex">
               <label className="flex items-center gap-2 text-[11px] text-slate-300">
                 Model
@@ -1432,6 +1440,7 @@ export default function HomePage() {
                 >
                   <option value="dem" disabled={!terrainSourcesAvailable.dem}>DEM</option>
                   <option value="dom" disabled={!terrainSourcesAvailable.dom}>DOM</option>
+                  <option value="dsm" disabled={!terrainSourcesAvailable.dsm}>DSM</option>
                 </select>
               </label>
               <label className="flex items-center gap-2 text-[11px] text-slate-300">
@@ -1484,8 +1493,8 @@ export default function HomePage() {
             terrainAvailable={terrainAvailable}
             terrainSourcesAvailable={terrainSourcesAvailable}
             terrainExaggeration={domTerrainMode ? 1 : terrainExaggeration}
-                        terrainOffIntentVersion={terrainOffIntentVersion}
-                        onEffectiveTerrainModeChange={setEffectiveTerrainMode}
+            terrainOffIntentVersion={terrainOffIntentVersion}
+            onEffectiveTerrainModeChange={setEffectiveTerrainMode}
             hillshadeStrength={domTerrainMode ? 0 : hillshadeStrength}
             selectedBuildingId={selectedBuilding?.id ?? null}
             selectedNutzungId={selectedNutzung?.id ?? null}

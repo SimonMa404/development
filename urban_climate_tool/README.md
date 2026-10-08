@@ -310,6 +310,64 @@ python scripts/validate_catalog.py
 
 The validation script checks catalogue integrity and emits clear errors when entries are invalid.
 
+## Generating shade and sun hour rasters
+
+The shade modelling pipeline computes exposure of each pixel to direct sunlight over the course of a day.
+
+### Modelling approach
+
+1. **Digital Surface Model (DSM)**: Combines DEM (terrain), building roof heights, and tree canopy heights
+   into a single 1m obstruction surface.
+2. **Solar Position**: Uses `pvlib` to compute sun position (azimuth, elevation) for each timestamp.
+3. **Shadow Casting**: For each timestamp, a ray is cast from each pixel towards the sun. If the ray hits
+   a higher surface (building or tree), the pixel is shaded; otherwise sunlit.
+4. **Tree Transmissivity**: Tree canopies are treated as semi-transparent (default: 20% of direct sunlight passes
+   through). Buildings are fully opaque.
+5. **Aggregation**: Results from multiple timestamps are aggregated into:
+   - **Sun hours**: count of sunlit timesteps per day
+   - **Shade hours**: count of shaded timesteps per day
+   - **Shade fraction**: percentage of checked times in shade
+
+### Generate and register shade rasters
+
+From the repository root:
+
+```bash
+python scripts/generate_shade_rasters.py --date 2023-07-21 --register
+```
+
+Options:
+- `--date YYYY-MM-DD`: Target date (summer reference day). Default: 2023-07-21
+- `--timezone TZ`: Timezone for solar calculations. Default: Europe/Berlin
+- `--times HH:MM,...`: Comma-separated times to simulate. Default: 10:00-18:00 hourly
+- `--tree-transmissivity FRACTION`: Fraction of sunlight passing through trees (0-1). Default: 0.2 (20%)
+- `--register`: Add generated layers to catalog/layers.yaml
+
+### Shade outputs
+
+Generated rasters are saved to `storage/rasters/derived/planegg/shade/` and include:
+- `sun_hours_*.tif`: Hours of direct sunlight per day
+- `shade_hours_*.tif`: Hours of shade (from buildings or trees) per day
+- `shade_fraction_*.tif`: Percentage of time in shade
+- `dsm_1m.tif`: Combined Digital Surface Model (terrain + buildings + trees)
+- `tree_canopy_1m.tif`: Tree-only obstruction layer (useful for transmissivity calculations)
+
+### Shade modelling limitations
+
+- **Tree geometry**: Canopies are simplified as circular buffers around tree points; actual crowns are irregular.
+- **Building model**: Extruded footprints used; roof slope and azimuth not modelled (2.5D, not full 3D).
+- **Transmissivity**: Uniform per-canopy; no LAI, species-specific, or seasonal leaf-on/leaf-off variation in phase 1.
+- **Ray-casting**: Approximate algorithm; not a full radiosity or BRF model. Uses simple per-pixel ray marching.
+- **Atmospheric effects**: Direct sun only; no diffuse sky or reflected radiation.
+- **Data currency**: Tree heights from 2025 dataset (leaf-on period); building heights from 2020 CityGML.
+
+### Future shade enhancements
+
+- Phase 2: Transmissivity parameterization by species and season (leaf-on/leaf-off).
+- Phase 2: Landsat/Sentinel overpass-time shade fraction outputs (explaining LST hotspots).
+- Phase 3: Integration with SOLWEIG for mean radiant temperature (thermal comfort).
+- Phase 3: Vector polygon shade analysis (e.g., for individual buildings or park areas).
+
 ## Future storage abstraction
 
 The repository and service interfaces are designed so local storage can later be replaced by S3-compatible object storage or cloud-backed data services without changing the API contract. This is implemented through repository abstractions and a configuration-driven dataset catalog.

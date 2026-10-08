@@ -1428,6 +1428,218 @@ layers:
   - planegg
   - timeseries
   is_demo: false
+
+- id: sun-hours-20230721
+  title: Sun Hours - 2023-07-21
+  short_title: Sun Hours
+  description: Hours of direct sunlight on 2023-07-21
+  layer_type: raster
+  thematic_group: shade
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/shade/sun_hours_2023-07-21.tif
+  data_format: geotiff
+  source: Urban Climate Tool shade model
+  units: hours
+  value_type: continuous
+  native_crs: EPSG:25832
+  spatial_resolution: 1
+  nodata: 0
+  value_range:
+    minimum: 0
+    maximum: 9
+  default_visible: false
+  default_opacity: 0.7
+  default_order: 41
+  min_zoom: 11
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - shade
+  - solar
+  - sun-hours
+  - modelling
+  - planegg
+  is_demo: false
+  style:
+    color_scale: shade_sun_hours
+    interpolation: nearest
+    opacity: 0.7
+  legend:
+    type: continuous
+    palette:
+    - '#0f172a'
+    - '#1d4ed8'
+    - '#22d3ee'
+    - '#fde047'
+    - '#f97316'
+    - '#dc2626'
+    labels:
+    - '0 h'
+    - '4.5 h'
+    - '9 h'
+
+- id: shade-hours-20230721
+  title: Shade Hours - 2023-07-21
+  short_title: Shade Hours
+  description: Hours of shade on 2023-07-21
+  layer_type: raster
+  thematic_group: shade
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/shade/shade_hours_2023-07-21.tif
+  data_format: geotiff
+  source: Urban Climate Tool shade model
+  units: hours
+  value_type: continuous
+  native_crs: EPSG:25832
+  spatial_resolution: 1
+  nodata: 0
+  value_range:
+    minimum: 0
+    maximum: 9
+  default_visible: false
+  default_opacity: 0.7
+  default_order: 42
+  min_zoom: 11
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - shade
+  - modelling
+  - planegg
+  is_demo: false
+  style:
+    color_scale: shade_shade_hours
+    interpolation: nearest
+    opacity: 0.7
+  legend:
+    type: continuous
+    palette:
+    - '#f8fafc'
+    - '#cbd5e1'
+    - '#60a5fa'
+    - '#2563eb'
+    - '#0f172a'
+    labels:
+    - '0 h'
+    - '4.5 h'
+    - '9 h'
+
+- id: shade-fraction-20230721
+  title: Shade Fraction - 2023-07-21
+  short_title: Shade Fraction
+  description: Fraction of day in shade on 2023-07-21
+  layer_type: raster
+  thematic_group: shade
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/shade/shade_fraction_2023-07-21.tif
+  data_format: geotiff
+  source: Urban Climate Tool shade model
+  units: fraction
+  value_type: continuous
+  native_crs: EPSG:25832
+  spatial_resolution: 1
+  nodata: 0
+  value_range:
+    minimum: 0
+    maximum: 1
+  default_visible: false
+  default_opacity: 0.7
+  default_order: 43
+  min_zoom: 11
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - shade
+  - modelling
+  - planegg
+  is_demo: false
+  style:
+    color_scale: shade_fraction
+    interpolation: nearest
+    opacity: 0.7
+  legend:
+    type: continuous
+    palette:
+    - '#f8fafc'
+    - '#cbd5e1'
+    - '#60a5fa'
+    - '#2563eb'
+    - '#0f172a'
+    labels:
+    - '0%'
+    - '50%'
+    - '100%'
+
+- id: dsm-planegg
+  title: Digital Surface Model (DSM)
+  short_title: DSM
+  description: 1m digital surface model combining terrain, buildings, and tree canopies.
+    Useful for 3D terrain rendering and elevation analysis.
+  layer_type: raster
+  thematic_group: Terrain
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/dsm_1m.tif
+  data_format: geotiff
+  source: Urban Climate Tool terrain model
+  units: m
+  value_type: continuous
+  native_crs: EPSG:25832
+  spatial_resolution: 1
+  nodata: 0
+  value_range:
+    minimum: 533
+    maximum: 611
+  default_visible: false
+  default_opacity: 0.85
+  default_order: 44
+  min_zoom: 11
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - terrain
+  - dsm
+  - elevation
+  - planegg
+  is_demo: false
+  style:
+    color_scale: elevation
+    interpolation: linear
+    opacity: 0.85
+  legend:
+    type: continuous
+    palette:
+    - '#0f172a'
+    - '#1d4ed8'
+    - '#38bdf8'
+    - '#22c55e'
+    - '#eab308'
+    - '#f97316'
+    - '#7c2d12'
+    labels:
+    - Low
+    - Mid
+    - High
+
 - id: rgb-sentinel-planegg-2017
   title: Planegg Sentinel-2 RGB Composite 2017
   short_title: RGB 2017

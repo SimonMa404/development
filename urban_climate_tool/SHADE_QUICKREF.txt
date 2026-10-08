@@ -1,0 +1,82 @@
+# QUICK START - Shade Generation
+
+## TL;DR - Run This
+
+Open VS Code terminal (`Ctrl+`` backtick) and paste:
+
+```bash
+cd "/Users/simonmarggraf/Library/CloudStorage/OneDrive-Persönlich/Desktop/9_Coding Projects/development/urban_climate_tool"
+source .venv/bin/activate
+python scripts/generate_dsm_only.py
+python scripts/generate_shade_rasters_phase2.py --date 2023-07-21 --register
+docker compose restart backend
+```
+
+**Total time: ~6 minutes first run, 2 minutes after that**
+
+---
+
+## What You'll See
+
+### Phase 1: DSM Building (~4 min)
+```
+[CHECKPOINT 1] Loading DEM...
+  ✓ DEM loaded (0.17s)
+
+[CHECKPOINT 2] Adding buildings...
+    Buildings |████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░| 25.3%
+    
+[CHECKPOINT 3] Adding trees...
+    Trees |███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░| 8.7%
+
+[COMPLETE] DSM building took 234.45s total
+```
+
+### Phase 2: Shade Computation (~2 min)
+```
+[CHECKPOINT 1] Loading DSM...
+  ✓ DSM loaded (0.5s)
+
+[CHECKPOINT 3] Ray-casting for 9 timestamps...
+  Timestamps |████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░| 44.4%
+
+[COMPLETE] Shade computation took 128.32s total
+```
+
+---
+
+## Then View It
+
+1. Open http://localhost:3000 in browser
+2. Left sidebar → "Shade & Solar" group
+3. Click layer to see on map
+4. Click pixels for values
+
+---
+
+## Terminal Tips
+
+| Need | Command |
+|------|---------|
+| Activate environment | `source .venv/bin/activate` |
+| Build DSM | `python scripts/generate_dsm_only.py` |
+| Full shade run | `python scripts/generate_shade_rasters_phase2.py --date 2023-07-21 --register` |
+| Quick test | `python scripts/test_shade_quick.py` |
+| Restart backend | `docker compose restart backend` |
+| Stop running | `Ctrl+C` |
+
+---
+
+## Common Issues
+
+| Problem | Fix |
+|---------|-----|
+| "Command not found" | Make sure you're in the project folder and venv activated |
+| No progress visible | Process is running, just slow at start. Be patient! |
+| Process seems stuck | Check if CPU is busy (normal for rasterization) |
+| Want different date | `python scripts/generate_shade_rasters_phase2.py --date 2023-06-21 --register` |
+| Want fewer timestamps | `python scripts/generate_shade_rasters_phase2.py --date 2023-07-21 --times 08:00,12:00,18:00 --register` |
+
+---
+
+See [SHADE_HOW_TO_RUN.md](SHADE_HOW_TO_RUN.md) for detailed instructions.
