@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
 import rasterio
-import requests
+from rasterio.enums import Resampling
+from rasterio.features import rasterize
 from rasterio.io import MemoryFile
+from rasterio.warp import transform_geom
 from rio_tiler.errors import TileOutsideBounds
 from rio_tiler.io import Reader
 
@@ -15,7 +19,6 @@ from app.repositories.local_raster import LocalRasterRepository
 from app.services.catalog_service import CatalogService
 
 ColorMap = dict[int, tuple[int, int, int, int]]
-GLOBAL_TERRAIN_30M_TEMPLATE = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
@@ -50,9 +53,15 @@ def _build_categorical_colormap(palette: list[str]) -> ColorMap:
 
 
 class RasterService:
-    TERRAIN_SOURCE_PATHS: dict[str, str] = {
-        "dem": "rasters/processed/planegg/dem_1m.tif",
-        "dom": "rasters/processed/planegg/dom_20cm.tif",
+    TERRAIN_SOURCE_PATHS: dict[str, tuple[str, ...]] = {
+        "dem": (
+            "rasters/processed/planegg/dem_1m_terrain_cog.tif",
+            "rasters/processed/planegg/dem_1m.tif",
+        ),
+        "dom": (
+            "rasters/processed/planegg/dom_terrain_1m_cog.tif",
+            "rasters/processed/planegg/dom_20cm.tif",
+        ),
     }
 
     def __init__(self, catalog_service: CatalogService | None = None):
@@ -82,27 +91,88 @@ class RasterService:
         path = self.repository.raster_path(layer.relative_path)
         palette = layer.legend.palette if layer.legend else ["#000000", "#ffffff"]
         is_categorical = layer.value_type == "categorical"
+        is_rgb = layer.value_type == "rgb" or (layer.style and layer.style.color_scale == "rgb")
+        is_relative_summer_lst = layer.temporal_group == "relative_summer_lst"
 
         try:
             with Reader(path) as reader:
-                image = reader.tile(x, y, z)
+                if is_rgb:
+                    image = reader.tile(x, y, z, resampling_method="nearest")
+                else:
+                    interpolation = (layer.style.interpolation if layer.style else "") or ""
+                    if is_relative_summer_lst:
+                        image = reader.tile(x, y, z, resampling_method="nearest", nodata=None)
+                    elif interpolation.lower() == "nearest":
+                        image = reader.tile(x, y, z, resampling_method="nearest")
+                    else:
+                        image = reader.tile(x, y, z)
         except TileOutsideBounds as exc:
             raise LayerUnavailableError(f"Requested tile is outside raster bounds for layer '{layer_id}'.") from exc
 
-        is_rgb = layer.value_type == "rgb" or (layer.style and layer.style.color_scale == "rgb")
         if is_rgb:
             rgb = image.data
             if rgb.shape[0] >= 3:
                 rgb = rgb[:3]
             elif rgb.shape[0] == 1:
                 rgb = np.repeat(rgb, 3, axis=0)
-            rgb = np.clip(rgb, 0, 255).astype(np.uint8)
-            return self._encode_rgb_png(rgb), "image/png"
+            rgb = rgb.astype(np.float32)
+            # Build AOI-valid mask from tile mask. This ensures strict clipping to real data.
+            if image.mask is not None:
+                mask = image.mask
+                if mask.ndim == 3:
+                    mask = mask[0]
+                valid_mask = mask > 0
+            else:
+                valid_mask = np.isfinite(rgb[0])
+
+            # Some RGB tiles expose full masks even outside AOI. Exclude probable nodata-black
+            # pixels so outside areas remain transparent and do not skew stretch statistics.
+            if layer.nodata == 0 or layer.temporal_group == "rgb_yearly":
+                non_black = np.any(np.isfinite(rgb) & (rgb > 1e-6), axis=0)
+                valid_mask = valid_mask & non_black
+
+            # Enforce strict Planegg clipping for yearly Sentinel RGB layers.
+            if "planegg" in layer.id and is_rgb:
+                aoi_mask = self._planegg_aoi_mask_for_tile(image)
+                if aoi_mask is not None:
+                    valid_mask = valid_mask & aoi_mask
+
+            # Use cached, layer-global RGB stretch bounds so colors remain stable across zoom levels.
+            p_bounds = self._rgb_percentile_bounds(str(path), layer.nodata)
+            out = np.zeros_like(rgb, dtype=np.uint8)
+            for band_idx in range(min(3, rgb.shape[0])):
+                band = rgb[band_idx]
+                band_valid = band[valid_mask & np.isfinite(band)]
+                if band_valid.size == 0:
+                    continue
+
+                p2, p98 = p_bounds[band_idx]
+                if p98 <= p2:
+                    p2 = float(np.percentile(band_valid, 2.0))
+                    p98 = float(np.percentile(band_valid, 98.0))
+                    if p98 <= p2:
+                        p98 = p2 + 1.0
+
+                scaled = (band - p2) / (p98 - p2)
+                scaled = np.clip(scaled, 0.0, 1.0)
+
+                band_u8 = np.clip(scaled * 255.0, 0, 255).astype(np.uint8)
+                band_u8[~valid_mask] = 0
+                out[band_idx] = band_u8
+
+            alpha = np.where(valid_mask, 255, 0).astype(np.uint8)
+            rgba = np.concatenate([out[:3], alpha[None, :, :]], axis=0)
+            return self._encode_rgba_png(rgba), "image/png"
 
         if is_categorical:
             colormap = _build_categorical_colormap(palette)
             png_bytes = image.render(img_format="PNG", colormap=colormap)
         else:
+            if is_relative_summer_lst and "planegg" in layer.id:
+                aoi_mask = self._planegg_aoi_mask_for_tile(image)
+                if aoi_mask is not None:
+                    image.mask = np.where(aoi_mask, 255, 0).astype(np.uint8)
+
             vmin = layer.value_range.minimum if layer.value_range else 0
             vmax = layer.value_range.maximum if layer.value_range else 1
             image.rescale(in_range=((vmin, vmax),))
@@ -112,44 +182,45 @@ class RasterService:
         return png_bytes, "image/png"
 
     def terrain_available(self, source: str = "dem") -> bool:
-        source_path = self.TERRAIN_SOURCE_PATHS.get(source)
-        if source_path is None:
+        source_paths = self.TERRAIN_SOURCE_PATHS.get(source)
+        if source_paths is None:
             return False
-        return self.repository.raster_path(source_path).exists()
+        return any(self.repository.raster_path(candidate).exists() for candidate in source_paths)
 
     def terrain_sources_available(self) -> dict[str, bool]:
         return {source: self.terrain_available(source) for source in self.TERRAIN_SOURCE_PATHS}
 
     def get_terrain_tile(self, z: int, x: int, y: int, source: str = "dem") -> tuple[bytes, str]:
-        source_path = self.TERRAIN_SOURCE_PATHS.get(source)
+        tile_bytes = self._get_terrain_tile_cached(z, x, y, source)
+        return tile_bytes, "image/png"
+
+    @lru_cache(maxsize=8192)
+    def _get_terrain_tile_cached(self, z: int, x: int, y: int, source: str = "dem") -> bytes:
+        source_path = self._resolve_terrain_source_path(source)
         if source_path is None:
             raise LayerUnavailableError(f"Unsupported terrain source '{source}'.")
 
         dem_path = self.repository.raster_path(source_path)
-        fallback_rgb = self._fetch_fallback_terrain_tile(z, x, y)
 
         if not dem_path.exists():
-            if fallback_rgb is None:
-                raise LayerUnavailableError(f"Terrain source '{source}' is missing and fallback terrain tile is unavailable.")
-            return self._encode_rgb_png(fallback_rgb), "image/png"
+            return self._flat_terrain_tile_png()
 
         try:
             with Reader(dem_path) as reader:
                 image = reader.tile(x, y, z, tilesize=256)
         except TileOutsideBounds:
-            if fallback_rgb is None:
-                raise LayerUnavailableError("Requested terrain tile is outside DEM bounds and fallback is unavailable.")
-            return self._encode_rgb_png(fallback_rgb), "image/png"
+            return self._flat_terrain_tile_png()
 
         dem = image.data[0].astype(np.float64)
         valid_mask = np.isfinite(dem) & (dem > -1000.0) & (dem != 0.0)
         if image.mask is not None:
             valid_mask &= image.mask > 0
-        if fallback_rgb is None and np.any(valid_mask):
+
+        if np.any(valid_mask):
             local_fill = float(np.median(dem[valid_mask]))
             dem = np.where(valid_mask, dem, local_fill)
         else:
-            dem = np.where(valid_mask, dem, 0.0)
+            return self._flat_terrain_tile_png()
         dem = np.nan_to_num(dem, nan=0.0)
 
         encoded = np.clip(dem + 32768.0, 0.0, 65535.0)
@@ -158,34 +229,118 @@ class RasterService:
         b = np.floor((encoded - np.floor(encoded)) * 256.0).astype(np.uint8)
         rgb = np.stack([r, g, b], axis=0)
 
-        if fallback_rgb is not None and not np.all(valid_mask):
-            fallback_copy = fallback_rgb.copy()
-            fallback_copy[:, valid_mask] = rgb[:, valid_mask]
-            rgb = fallback_copy
+        return self._encode_rgb_png(rgb)
 
-        return self._encode_rgb_png(rgb), "image/png"
-
-    def _fetch_fallback_terrain_tile(self, z: int, x: int, y: int) -> np.ndarray | None:
-        url = GLOBAL_TERRAIN_30M_TEMPLATE.format(z=z, x=x, y=y)
-        try:
-            response = requests.get(url, timeout=20)
-            response.raise_for_status()
-            with MemoryFile(response.content) as mem:
-                with mem.open() as src:
-                    data = src.read()
-                    if data.shape[0] >= 3:
-                        return data[:3].astype(np.uint8)
-        except requests.RequestException:
+    def _resolve_terrain_source_path(self, source: str) -> str | None:
+        candidates = self.TERRAIN_SOURCE_PATHS.get(source)
+        if candidates is None:
             return None
-        except Exception:
-            return None
-        return None
+        for candidate in candidates:
+            if self.repository.raster_path(candidate).exists():
+                return candidate
+        return candidates[-1]
 
-    def _encode_rgb_png(self, rgb: np.ndarray) -> bytes:
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _flat_terrain_tile_png() -> bytes:
+        # Terrarium encoding for an approximate local baseline elevation.
+        # Using ~540m avoids extreme cliffs when neighboring tiles have valid heights.
+        baseline_elevation_m = 540.0
+        encoded = np.clip(baseline_elevation_m + 32768.0, 0.0, 65535.0)
+        r = int(np.floor(encoded / 256.0))
+        g = int(np.floor(encoded % 256.0))
+        b = int(np.floor((encoded - np.floor(encoded)) * 256.0))
+        flat_rgb = np.zeros((3, 256, 256), dtype=np.uint8)
+        flat_rgb[0, :, :] = r
+        flat_rgb[1, :, :] = g
+        flat_rgb[2, :, :] = b
+        return RasterService._encode_rgb_png(flat_rgb)
+
+    @staticmethod
+    def _encode_rgb_png(rgb: np.ndarray) -> bytes:
         with MemoryFile() as memfile:
             with memfile.open(driver="PNG", width=256, height=256, count=3, dtype="uint8") as dst:
                 dst.write(rgb)
             return memfile.read()
+
+    @staticmethod
+    def _encode_rgba_png(rgba: np.ndarray) -> bytes:
+        with MemoryFile() as memfile:
+            with memfile.open(driver="PNG", width=256, height=256, count=4, dtype="uint8") as dst:
+                dst.write(rgba)
+            return memfile.read()
+
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _planegg_boundary_geom() -> dict[str, Any] | None:
+        path = settings.data_root_path / "vectors/processed/planegg/boundary.geojson"
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        features = payload.get("features") if isinstance(payload, dict) else None
+        if not isinstance(features, list) or not features:
+            return None
+        geom = features[0].get("geometry") if isinstance(features[0], dict) else None
+        return geom if isinstance(geom, dict) else None
+
+    def _planegg_aoi_mask_for_tile(self, image: Any) -> np.ndarray | None:
+        geom = self._planegg_boundary_geom()
+        if geom is None:
+            return None
+        transform = getattr(image, "transform", None)
+        crs = getattr(image, "crs", None)
+        if transform is None or crs is None:
+            return None
+        try:
+            geom_proj = transform_geom("EPSG:4326", str(crs), geom)
+            height = int(image.data.shape[1])
+            width = int(image.data.shape[2])
+            mask = rasterize(
+                [(geom_proj, 1)],
+                out_shape=(height, width),
+                transform=transform,
+                fill=0,
+                all_touched=True,
+                dtype=np.uint8,
+            )
+            return mask > 0
+        except Exception:
+            return None
+
+    @staticmethod
+    @lru_cache(maxsize=64)
+    def _rgb_percentile_bounds(raster_path: str, nodata: float | int | None) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+        with rasterio.open(raster_path) as ds:
+            h, w = ds.height, ds.width
+            scale = max(h / 1024, w / 1024, 1)
+            out_h = max(1, int(h / scale))
+            out_w = max(1, int(w / scale))
+            arr = ds.read(indexes=[1, 2, 3], out_shape=(3, out_h, out_w), resampling=Resampling.bilinear).astype(np.float32)
+
+        bounds: list[tuple[float, float]] = []
+        for band in arr:
+            valid = np.isfinite(band)
+            if nodata is not None:
+                valid &= band != float(nodata)
+            valid &= band > 0
+            values = band[valid]
+            if values.size < 16:
+                values = band[np.isfinite(band)]
+            if values.size == 0:
+                bounds.append((0.0, 1.0))
+                continue
+            p2 = float(np.percentile(values, 2.0))
+            p98 = float(np.percentile(values, 98.0))
+            if p98 <= p2:
+                p98 = p2 + 1.0
+            bounds.append((p2, p98))
+
+        while len(bounds) < 3:
+            bounds.append(bounds[-1] if bounds else (0.0, 1.0))
+        return bounds[0], bounds[1], bounds[2]
 
     def sample_point(self, layer_id: str, lon: float, lat: float) -> dict[str, Any]:
         layer = self.catalog_service.get_by_id(layer_id)

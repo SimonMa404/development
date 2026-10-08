@@ -31,7 +31,7 @@ export function CollapsiblePanel({
   }
 
   return (
-    <div className={`glass-panel flex h-full min-h-0 flex-col rounded-xl ${widthClass}`}>
+    <div className={`glass-panel flex max-h-[80vh] flex-col rounded-xl ${widthClass}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -54,7 +54,7 @@ export function CollapsiblePanel({
           </svg>
         </span>
       </button>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">{children}</div>
+      <div className="overflow-y-auto px-3 pb-3">{children}</div>
     </div>
   );
 }

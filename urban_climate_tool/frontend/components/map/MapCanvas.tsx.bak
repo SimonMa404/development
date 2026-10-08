@@ -170,7 +170,7 @@ export function MapCanvas({
   terrain3dEnabled = false,
   terrainSource = "dem",
   terrainAvailable = false,
-  terrainSourcesAvailable = { dem: true, dom: true },
+  terrainSourcesAvailable = { dem: false, dom: false },
   terrainExaggeration = 1.8,
   hillshadeStrength = 0.7,
   selectedBuildingId = null,
@@ -435,8 +435,9 @@ export function MapCanvas({
   const mapStyle = useMemo(() => BASEMAP_STYLES[basemap], [basemap]);
 
   useEffect(() => {
-    const map = mapRef.current?.getMap();
-    if (!map) return;
+    const timer = window.setTimeout(() => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
 
       const sourceAvailable = Boolean(terrainSourcesAvailable[terrainSource]);
       const nextDomMode = terrainSource === "dom";
@@ -519,7 +520,9 @@ export function MapCanvas({
       }
       previousTerrainModeRef.current = "off";
       setEffectiveTerrainMode("off");
-    return;
+    }, 50);
+
+    return () => window.clearTimeout(timer);
   }, [terrain3dEnabled, terrainAvailable, terrainExaggeration, terrainRevision, mapStyle, terrainSourceId, terrainSource, terrainSourcesAvailable]);
 
   useEffect(() => {
@@ -591,23 +594,27 @@ export function MapCanvas({
         }}
         onStyleData={() => setTerrainRevision((v) => v + 1)}
       >
-        <Source
-          id="terrain-dem"
-          type="raster-dem"
-          tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dem`]}
-          tileSize={256}
-          encoding="terrarium"
-          maxzoom={14}
-        />
+        {terrainSourcesAvailable.dem ? (
+          <Source
+            id="terrain-dem"
+            type="raster-dem"
+            tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dem`]}
+            tileSize={256}
+            encoding="terrarium"
+            maxzoom={14}
+          />
+        ) : null}
 
-        <Source
-          id="terrain-dom"
-          type="raster-dem"
-          tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dom`]}
-          tileSize={256}
-          encoding="terrarium"
-          maxzoom={13}
-        />
+        {terrainSourcesAvailable.dom ? (
+          <Source
+            id="terrain-dom"
+            type="raster-dem"
+            tiles={[`${apiBaseUrl}/api/terrain/{z}/{x}/{y}.png?source=dom`]}
+            tileSize={256}
+            encoding="terrarium"
+            maxzoom={13}
+          />
+        ) : null}
 
         {effectiveTerrainMode === "dem" ? (
           <Layer

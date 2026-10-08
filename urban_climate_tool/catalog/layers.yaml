@@ -1,544 +1,1862 @@
 layers:
-  - id: planegg-boundary
-    title: Planegg Boundary
-    short_title: Planegg Boundary
-    description: Official municipal boundary of Planegg (Gemeinde), Bavaria, from the BKG VG250 administrative dataset.
-    layer_type: vector
-    thematic_group: Administrative
-    area: planegg
-    storage_backend: local
-    relative_path: vectors/processed/planegg/boundary.geojson
-    data_format: geojson
-    source: "BKG VG250 (2026-01-01 release)"
-    attribution: "© GeoBasis-DE / BKG"
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.385189
-      miny: 48.078465
-      maxx: 11.463442
-      maxy: 48.120001
-    acquisition_date: "2026-01-01"
-    default_visible: true
-    default_opacity: 1.0
-    default_order: 1
-    min_zoom: 8
-    max_zoom: 20
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "boundary"
-      opacity: 1.0
-    legend:
-      type: categorical
-      palette:
-        - "#0f172a"
-      labels:
-        - "Municipal boundary"
-    analysis_capabilities:
-      - area_statistics
-    tags:
-      - boundary
-      - administrative
-      - planegg
-    is_demo: false
-
-  - id: planegg-boundary-buffered
-    title: Planegg Analysis Region (500m buffer)
-    short_title: ROI (buffered)
-    description: Planegg municipal boundary buffered by 500m, used as the region of interest for raster data exports.
-    layer_type: vector
-    thematic_group: Administrative
-    area: planegg
-    storage_backend: local
-    relative_path: vectors/processed/planegg/boundary_buffered.geojson
-    data_format: geojson
-    source: "BKG VG250 (2026-01-01 release), 500m buffer"
-    attribution: "© GeoBasis-DE / BKG"
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.378476
-      miny: 48.073969
-      maxx: 11.470156
-      maxy: 48.124493
-    acquisition_date: "2026-01-01"
-    default_visible: false
-    default_opacity: 0.4
-    default_order: 2
-    min_zoom: 8
-    max_zoom: 20
-    inspectable: false
-    selectable: true
-    style:
-      color_scale: "context"
-      opacity: 0.4
-    legend:
-      type: categorical
-      palette:
-        - "#64748b"
-      labels:
-        - "Analysis region (500m buffer)"
-    analysis_capabilities: []
-    tags:
-      - boundary
-      - context
-      - planegg
-    is_demo: false
-
-  - id: ndvi-planegg
-    title: Vegetation Health (NDVI)
-    short_title: Vegetation Health (NDVI)
-    description: Normalized Difference Vegetation Index derived from Sentinel-2 surface reflectance (median composite, May–Sep 2025).
-    layer_type: raster
-    thematic_group: Vegetation
-    area: planegg
-    storage_backend: local
-    relative_path: rasters/processed/planegg/ndvi.tif
-    data_format: geotiff
-    source: "Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine"
-    attribution: "Copernicus Sentinel-2 / ESA, processed via Google Earth Engine"
-    units: "NDVI"
-    value_type: continuous
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.378421
-      miny: 48.073881
-      maxx: 11.470229
-      maxy: 48.124546
-    acquisition_date: "2025-09-30"
-    temporal_start: "2025-05-01"
-    temporal_end: "2025-09-30"
-    spatial_resolution: 10
-    nodata: 0
-    value_range:
-      minimum: -1.0
-      maximum: 1.0
-    default_visible: false
-    default_opacity: 0.75
-    default_order: 10
-    min_zoom: 8
-    max_zoom: 18
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "ndvi"
-      interpolation: "linear"
-      opacity: 0.75
-    legend:
-      type: continuous
-      palette:
-        - "#8B4513"
-        - "#d73027"
-        - "#fee08b"
-        - "#ffffbf"
-        - "#a6d96a"
-        - "#1a9850"
-        - "#00441b"
-      labels:
-        - "No vegetation"
-        - "Low vegetation"
-        - "Moderate vegetation"
-        - "Dense vegetation"
-        - "Very dense vegetation"
-    analysis_capabilities:
-      - point_value
-      - area_statistics
-    tags:
-      - vegetation
-      - ndvi
-      - sentinel-2
-      - planegg
-    is_demo: false
-
-  - id: lst-planegg
-    title: Surface Temperature
-    short_title: Surface Temperature
-    description: Mean land surface temperature derived from Landsat 8/9 Collection 2 Level 2 thermal band (cloud cover < 3%, last 2 years).
-    layer_type: raster
-    thematic_group: Heat
-    area: planegg
-    storage_backend: local
-    relative_path: rasters/processed/planegg/lst.tif
-    data_format: geotiff
-    source: "Landsat 8/9 Collection 2 Level 2 (LANDSAT/LC08-09/C02/T1_L2), Google Earth Engine"
-    attribution: "USGS/NASA Landsat, processed via Google Earth Engine"
-    units: "°C"
-    value_type: continuous
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.378421
-      miny: 48.073881
-      maxx: 11.470229
-      maxy: 48.124546
-    acquisition_date: "2026-09-25"
-    temporal_start: "2024-09-25"
-    temporal_end: "2026-09-25"
-    spatial_resolution: 30
-    nodata: 0
-    value_range:
-      minimum: 18
-      maximum: 32
-    default_visible: false
-    default_opacity: 0.75
-    default_order: 20
-    min_zoom: 8
-    max_zoom: 18
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "temperature"
-      interpolation: "linear"
-      opacity: 0.75
-    legend:
-      type: continuous
-      palette:
-        - "#313695"
-        - "#4575b4"
-        - "#74add1"
-        - "#abd9e9"
-        - "#e0f3f8"
-        - "#fee090"
-        - "#fdae61"
-        - "#f46d43"
-        - "#d73027"
-    analysis_capabilities:
-      - point_value
-      - area_statistics
-    tags:
-      - heat
-      - lst
-      - landsat
-      - planegg
-    is_demo: false
-
-  - id: lulc-planegg
-    title: Planegg Land Cover Classes
-    short_title: LULC
-    description: Dominant land-cover class (annual mode composite, 2025) from Google Dynamic World V1.
-    layer_type: raster
-    thematic_group: Land Cover
-    area: planegg
-    storage_backend: local
-    relative_path: rasters/processed/planegg/lulc.tif
-    data_format: geotiff
-    source: "Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine"
-    attribution: "Google Dynamic World, processed via Google Earth Engine"
-    units: "class"
-    value_type: categorical
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.378421
-      miny: 48.073881
-      maxx: 11.470229
-      maxy: 48.124546
-    acquisition_date: "2025-12-31"
-    temporal_start: "2025-01-01"
-    temporal_end: "2025-12-31"
-    spatial_resolution: 10
-    nodata: -2147483648
-    value_range:
-      minimum: 0
-      maximum: 8
-    default_visible: false
-    default_opacity: 0.8
-    default_order: 30
-    min_zoom: 8
-    max_zoom: 18
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "categorical"
-      interpolation: "nearest"
-      opacity: 0.8
-    legend:
-      type: categorical
-      palette:
-        - "#419BDF"
-        - "#397D49"
-        - "#88B053"
-        - "#7A87C6"
-        - "#E49635"
-        - "#DFC35A"
-        - "#C4281B"
-        - "#A59B8F"
-        - "#B39FE1"
-      labels:
-        - "Water"
-        - "Trees"
-        - "Grass"
-        - "Flooded vegetation"
-        - "Crops"
-        - "Shrub & scrub"
-        - "Built area"
-        - "Bare ground"
-        - "Snow & ice"
-    analysis_capabilities:
-      - point_value
-      - area_statistics
-    tags:
-      - land-cover
-      - lulc
-      - dynamic-world
-      - planegg
-    is_demo: false
-
-  - id: rgb20cm-planegg
-    title: Orthophoto RGB (20cm)
-    short_title: RGB 20cm
-    description: High-resolution true-color orthophoto (20cm) for Planegg from Bayern Open Data meta4 delivery, captured on 2024-08-24.
-    layer_type: raster
-    thematic_group: Basemap
-    area: planegg
-    storage_backend: local
-    relative_path: rasters/processed/planegg/rgb_20cm.tif
-    data_format: geotiff
-    source: "Bayern Orthophoto RGB 20cm (image date 2024-08-24; meta4 published 2026-10-06)"
-    attribution: "© Bayerische Vermessungsverwaltung"
-    units: "RGB"
-    value_type: rgb
-    native_crs: EPSG:25832
-    acquisition_date: "2024-08-24"
-    spatial_resolution: 0.2
-    nodata: 0
-    default_visible: false
-    default_opacity: 1.0
-    default_order: 25
-    min_zoom: 8
-    max_zoom: 20
-    inspectable: false
-    selectable: false
-    style:
-      color_scale: "rgb"
-      interpolation: "linear"
-      opacity: 1.0
-    legend:
-      type: categorical
-      palette:
-        - "#000000"
-      labels:
-        - "True-color imagery"
-    analysis_capabilities: []
-    tags:
-      - orthophoto
-      - rgb
-      - 20cm
-      - planegg
-    is_demo: false
-
-  - id: buildings-3d-planegg
-    title: 3D Buildings (LoD2) – Planegg
-    short_title: 3D Buildings
-    description: Building footprints and heights extracted from Bayern LoD2 CityGML tiles for the Planegg analysis region.
-    layer_type: vector
-    thematic_group: Built Environment
-    area: planegg
-    storage_backend: local
-    relative_path: vectors/processed/planegg/buildings_3d.geojson
-    data_format: geojson
-    source: "BayernWolke LoD2 CityGML"
-    attribution: "© Bayerische Vermessungsverwaltung"
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.378421
-      miny: 48.073881
-      maxx: 11.470229
-      maxy: 48.124546
-    acquisition_date: "2023-12-05"
-    spatial_resolution: 1
-    default_visible: true
-    default_opacity: 0.9
-    default_order: 35
-    min_zoom: 11
-    max_zoom: 20
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "buildings3d"
-      opacity: 0.75
-    legend:
-      type: categorical
-      palette:
-        - "#6b7280"
-      labels:
-        - "Building extrusion"
-    analysis_capabilities:
-      - point_value
-    tags:
-      - buildings
-      - citygml
-      - lod2
-      - 3d
-      - planegg
-    is_demo: false
-
-  - id: census-2022-100m-planegg
-    title: Census 2022 Population Grid (100m)
-    short_title: Census Population (100m)
-    description: ROI-filtered 100m German Census 2022 grid with population counts and age shares (65+ and under 18).
-    layer_type: vector
-    thematic_group: Demography
-    area: planegg
-    storage_backend: local
-    relative_path: vectors/processed/planegg/census_2022_100m.geojson
-    data_format: geojson
-    source: "German Census 2022 (Zensus 2022), accessed via z22data repository"
-    attribution: "© Statistische Ämter des Bundes und der Länder; data prepared via z22data"
-    native_crs: EPSG:4326
-    acquisition_date: "2022-05-15"
-    spatial_resolution: 100
-    default_visible: false
-    default_opacity: 0.6
-    default_order: 40
-    min_zoom: 10
-    max_zoom: 20
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "population"
-      opacity: 0.6
-    legend:
-      type: continuous
-      palette:
-        - "#e2e8f0"
-        - "#93c5fd"
-        - "#3b82f6"
-        - "#f59e0b"
-        - "#ef4444"
-      labels:
-        - "0"
-        - "25"
-        - "100"
-        - "250"
-        - "500+"
-    analysis_capabilities:
-      - heat_vulnerability
-    tags:
-      - census
-      - zensus2022
-      - population
-      - elderly
-      - children
-      - planegg
-    is_demo: false
-
-  - id: trees-3d-planegg
-    title: Individual Trees (3D) – Planegg
-    short_title: 3D Trees
-    description: Individual tree locations with heights derived from the Bayern Open Data Einzelbäume dataset, using the 2025-02-13 dataset release for Planegg. Features point locations with absolute and relative height attributes for 3D visualization.
-    layer_type: vector
-    thematic_group: Vegetation
-    area: planegg
-    storage_backend: local
-    relative_path: vectors/processed/planegg/trees.geojson
-    data_format: geojson
-    source: "Bayern OpenGeoData – Einzelbäume (Individual Trees), dataset release 2025-02-13"
-    attribution: "© Bayerische Landesanstalt für Wald und Forstwirtschaft, Bayerisches Landesamt für Digitalisierung, Breitband und Vermessung"
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.378
-      miny: 48.074
-      maxx: 11.471
-      maxy: 48.125
-    acquisition_date: "2025-02-13"
-    spatial_resolution: 1
-    default_visible: true
-    default_opacity: 0.85
-    default_order: 36
-    min_zoom: 13
-    max_zoom: 20
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "trees3d"
-      opacity: 0.85
-    legend:
-      type: categorical
-      palette:
-        - "#166534"
-      labels:
-        - "Tree (3D extrusion)"
-    analysis_capabilities:
-      - point_value
-    tags:
-      - trees
-      - vegetation
-      - 3d
-      - height
-      - planegg
-      - einzelbaeume
-    is_demo: false
-
-  - id: nutzung-planegg
-    title: ALKIS Tatsächliche Nutzung – Planegg
-    short_title: ALKIS Nutzung
-    description: ALKIS tatsächliche Nutzung polygons clipped to the Planegg analysis region, with categories based on the `nutzart` attribute.
-    layer_type: vector
-    thematic_group: Land Use
-    area: planegg
-    storage_backend: local
-    relative_path: vectors/processed/planegg/nutzung.geojson
-    data_format: geojson
-    source: "ALKIS Tatsächliche Nutzung (KIS-WFS Ausgabeformat Shape, Version 2.0.0)"
-    attribution: "© Bayerische Vermessungsverwaltung"
-    native_crs: EPSG:4326
-    bounds:
-      minx: 11.385237
-      miny: 48.078465
-      maxx: 11.463442
-      maxy: 48.118544
-    acquisition_date: "2026-09-15"
-    default_visible: false
-    default_opacity: 0.7
-    default_order: 41
-    min_zoom: 11
-    max_zoom: 20
-    inspectable: true
-    selectable: true
-    style:
-      color_scale: "nutzung"
-      opacity: 0.7
-    legend:
-      type: categorical
-      palette:
-        - "#f59e0b"
-        - "#6b7280"
-        - "#a855f7"
-        - "#84cc16"
-        - "#eab308"
-        - "#15803d"
-        - "#22c55e"
-        - "#3b82f6"
-        - "#06b6d4"
-        - "#475569"
-        - "#334155"
-        - "#94a3b8"
-        - "#cbd5e1"
-        - "#65a30d"
-        - "#f97316"
-        - "#92400e"
-        - "#78716c"
-      labels:
-        - "Wohnbaufläche"
-        - "Industrie- und Gewerbefläche"
-        - "Fläche gemischter Nutzung"
-        - "Sport-, Freizeit- und Erholungsfläche"
-        - "Landwirtschaft"
-        - "Wald"
-        - "Gehölz"
-        - "Stehendes Gewässer"
-        - "Fließgewässer"
-        - "Straßenverkehr"
-        - "Bahnverkehr"
-        - "Weg"
-        - "Platz"
-        - "Friedhof"
-        - "Fläche besonderer funktionaler Prägung"
-        - "Tagebau, Grube, Steinbruch"
-        - "Unland/Vegetationslose Fläche"
-    analysis_capabilities:
-      - point_value
-    tags:
-      - alkis
-      - land-use
-      - nutzung
-      - planegg
-    is_demo: false
+- id: planegg-boundary
+  title: Planegg Boundary
+  short_title: Planegg Boundary
+  description: Official municipal boundary of Planegg (Gemeinde), Bavaria, from the BKG VG250 administrative dataset.
+  layer_type: vector
+  thematic_group: Administrative
+  area: planegg
+  storage_backend: local
+  relative_path: vectors/processed/planegg/boundary.geojson
+  data_format: geojson
+  source: BKG VG250 (2026-01-01 release)
+  attribution: © GeoBasis-DE / BKG
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.385189
+    miny: 48.078465
+    maxx: 11.463442
+    maxy: 48.120001
+  acquisition_date: '2026-01-01'
+  default_visible: true
+  default_opacity: 1.0
+  default_order: 1
+  min_zoom: 8
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: boundary
+    opacity: 1.0
+  legend:
+    type: categorical
+    palette:
+    - '#0f172a'
+    labels:
+    - Municipal boundary
+  analysis_capabilities:
+  - area_statistics
+  tags:
+  - boundary
+  - administrative
+  - planegg
+  is_demo: false
+- id: planegg-boundary-buffered
+  title: Planegg Analysis Region (500m buffer)
+  short_title: ROI (buffered)
+  description: Planegg municipal boundary buffered by 500m, used as the region of interest for raster data exports.
+  layer_type: vector
+  thematic_group: Administrative
+  area: planegg
+  storage_backend: local
+  relative_path: vectors/processed/planegg/boundary_buffered.geojson
+  data_format: geojson
+  source: BKG VG250 (2026-01-01 release), 500m buffer
+  attribution: © GeoBasis-DE / BKG
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.378476
+    miny: 48.073969
+    maxx: 11.470156
+    maxy: 48.124493
+  acquisition_date: '2026-01-01'
+  default_visible: false
+  default_opacity: 0.4
+  default_order: 2
+  min_zoom: 8
+  max_zoom: 20
+  inspectable: false
+  selectable: true
+  style:
+    color_scale: context
+    opacity: 0.4
+  legend:
+    type: categorical
+    palette:
+    - '#64748b'
+    labels:
+    - Analysis region (500m buffer)
+  analysis_capabilities: []
+  tags:
+  - boundary
+  - context
+  - planegg
+  is_demo: false
+- id: ndvi-planegg
+  title: Vegetation Health (NDVI)
+  short_title: Vegetation Health (NDVI)
+  description: Normalized Difference Vegetation Index derived from Sentinel-2 surface reflectance (median composite, May–Sep
+    2025).
+  layer_type: raster
+  thematic_group: Vegetation
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/processed/planegg/ndvi.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: NDVI
+  value_type: continuous
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.378421
+    miny: 48.073881
+    maxx: 11.470229
+    maxy: 48.124546
+  acquisition_date: '2025-09-30'
+  temporal_start: '2025-05-01'
+  temporal_end: '2025-09-30'
+  spatial_resolution: 10
+  nodata: 0
+  value_range:
+    minimum: -1.0
+    maximum: 1.0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 10
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: ndvi
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: continuous
+    palette:
+    - '#8B4513'
+    - '#d73027'
+    - '#fee08b'
+    - '#ffffbf'
+    - '#a6d96a'
+    - '#1a9850'
+    - '#00441b'
+    labels:
+    - No vegetation
+    - Low vegetation
+    - Moderate vegetation
+    - Dense vegetation
+    - Very dense vegetation
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - vegetation
+  - ndvi
+  - sentinel-2
+  - planegg
+  is_demo: false
+- id: lst-planegg
+  title: Surface Temperature
+  short_title: Surface Temperature
+  description: Mean land surface temperature derived from Landsat 8/9 Collection 2 Level 2 thermal band (cloud cover < 3%,
+    last 2 years).
+  layer_type: raster
+  thematic_group: Heat
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/processed/planegg/lst.tif
+  data_format: geotiff
+  source: Landsat 8/9 Collection 2 Level 2 (LANDSAT/LC08-09/C02/T1_L2), Google Earth Engine
+  attribution: USGS/NASA Landsat, processed via Google Earth Engine
+  units: °C
+  value_type: continuous
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.378421
+    miny: 48.073881
+    maxx: 11.470229
+    maxy: 48.124546
+  acquisition_date: '2026-09-25'
+  temporal_start: '2024-09-25'
+  temporal_end: '2026-09-25'
+  temporal_group: relative_summer_lst
+  temporal_metric: anomaly_degC
+  temporal_year: 2026
+  spatial_resolution: 30
+  nodata: 0
+  value_range:
+    minimum: 18
+    maximum: 32
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 20
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: temperature
+    interpolation: nearest
+    opacity: 0.75
+  legend: &id001
+    type: continuous
+    palette:
+    - '#313695'
+    - '#4575b4'
+    - '#74add1'
+    - '#abd9e9'
+    - '#e0f3f8'
+    - '#fee090'
+    - '#fdae61'
+    - '#f46d43'
+    - '#d73027'
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - heat
+  - lst
+  - landsat
+  - relative-summer-lst
+  - planegg
+  is_demo: false
+- id: lulc-planegg
+  title: Planegg Land Cover Classes
+  short_title: LULC
+  description: Dominant land-cover class (annual mode composite, 2025) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/processed/planegg/lulc.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.378421
+    miny: 48.073881
+    maxx: 11.470229
+    maxy: 48.124546
+  acquisition_date: '2025-12-31'
+  temporal_start: '2025-01-01'
+  temporal_end: '2025-12-31'
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 30
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  is_demo: false
+- id: rgb20cm-planegg
+  title: Orthophoto RGB (20cm)
+  short_title: RGB 20cm
+  description: High-resolution true-color orthophoto (20cm) for Planegg from Bayern Open Data meta4 delivery, captured on
+    2024-08-24.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/processed/planegg/rgb_20cm.tif
+  data_format: geotiff
+  source: Bayern Orthophoto RGB 20cm (image date 2024-08-24; meta4 published 2026-10-06)
+  attribution: © Bayerische Vermessungsverwaltung
+  units: RGB
+  value_type: rgb
+  native_crs: EPSG:25832
+  acquisition_date: '2024-08-24'
+  spatial_resolution: 0.2
+  nodata: 0
+  default_visible: false
+  default_opacity: 1.0
+  default_order: 25
+  min_zoom: 8
+  max_zoom: 20
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 1.0
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - orthophoto
+  - rgb
+  - 20cm
+  - planegg
+  is_demo: false
+- id: buildings-3d-planegg
+  title: 3D Buildings (LoD2) – Planegg
+  short_title: 3D Buildings
+  description: Building footprints and heights extracted from Bayern LoD2 CityGML tiles for the Planegg analysis region.
+  layer_type: vector
+  thematic_group: Built Environment
+  area: planegg
+  storage_backend: local
+  relative_path: vectors/processed/planegg/buildings_3d.geojson
+  data_format: geojson
+  source: BayernWolke LoD2 CityGML
+  attribution: © Bayerische Vermessungsverwaltung
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.378421
+    miny: 48.073881
+    maxx: 11.470229
+    maxy: 48.124546
+  acquisition_date: '2023-12-05'
+  spatial_resolution: 1
+  default_visible: true
+  default_opacity: 0.9
+  default_order: 35
+  min_zoom: 11
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: buildings3d
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#6b7280'
+    labels:
+    - Building extrusion
+  analysis_capabilities:
+  - point_value
+  tags:
+  - buildings
+  - citygml
+  - lod2
+  - 3d
+  - planegg
+  is_demo: false
+- id: census-2022-100m-planegg
+  title: Census 2022 Population Grid (100m)
+  short_title: Census Population (100m)
+  description: ROI-filtered 100m German Census 2022 grid with population counts and age shares (65+ and under 18).
+  layer_type: vector
+  thematic_group: Demography
+  area: planegg
+  storage_backend: local
+  relative_path: vectors/processed/planegg/census_2022_100m.geojson
+  data_format: geojson
+  source: German Census 2022 (Zensus 2022), accessed via z22data repository
+  attribution: © Statistische Ämter des Bundes und der Länder; data prepared via z22data
+  native_crs: EPSG:4326
+  acquisition_date: '2022-05-15'
+  spatial_resolution: 100
+  default_visible: false
+  default_opacity: 0.6
+  default_order: 40
+  min_zoom: 10
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: population
+    opacity: 0.6
+  legend:
+    type: continuous
+    palette:
+    - '#e2e8f0'
+    - '#93c5fd'
+    - '#3b82f6'
+    - '#f59e0b'
+    - '#ef4444'
+    labels:
+    - '0'
+    - '25'
+    - '100'
+    - '250'
+    - 500+
+  analysis_capabilities:
+  - heat_vulnerability
+  tags:
+  - census
+  - zensus2022
+  - population
+  - elderly
+  - children
+  - planegg
+  is_demo: false
+- id: trees-3d-planegg
+  title: Individual Trees (3D) – Planegg
+  short_title: 3D Trees
+  description: Individual tree locations with heights derived from the Bayern Open Data Einzelbäume dataset, using the 2025-02-13
+    dataset release for Planegg. Features point locations with absolute and relative height attributes for 3D visualization.
+  layer_type: vector
+  thematic_group: Vegetation
+  area: planegg
+  storage_backend: local
+  relative_path: vectors/processed/planegg/trees.geojson
+  data_format: geojson
+  source: Bayern OpenGeoData – Einzelbäume (Individual Trees), dataset release 2025-02-13
+  attribution: © Bayerische Landesanstalt für Wald und Forstwirtschaft, Bayerisches Landesamt für Digitalisierung, Breitband
+    und Vermessung
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.378
+    miny: 48.074
+    maxx: 11.471
+    maxy: 48.125
+  acquisition_date: '2025-02-13'
+  spatial_resolution: 1
+  default_visible: true
+  default_opacity: 0.85
+  default_order: 36
+  min_zoom: 13
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: trees3d
+    opacity: 0.85
+  legend:
+    type: categorical
+    palette:
+    - '#166534'
+    labels:
+    - Tree (3D extrusion)
+  analysis_capabilities:
+  - point_value
+  tags:
+  - trees
+  - vegetation
+  - 3d
+  - height
+  - planegg
+  - einzelbaeume
+  is_demo: false
+- id: nutzung-planegg
+  title: ALKIS Tatsächliche Nutzung – Planegg
+  short_title: ALKIS Nutzung
+  description: ALKIS tatsächliche Nutzung polygons clipped to the Planegg analysis region, with categories based on the `nutzart`
+    attribute.
+  layer_type: vector
+  thematic_group: Land Use
+  area: planegg
+  storage_backend: local
+  relative_path: vectors/processed/planegg/nutzung.geojson
+  data_format: geojson
+  source: ALKIS Tatsächliche Nutzung (KIS-WFS Ausgabeformat Shape, Version 2.0.0)
+  attribution: © Bayerische Vermessungsverwaltung
+  native_crs: EPSG:4326
+  bounds:
+    minx: 11.385237
+    miny: 48.078465
+    maxx: 11.463442
+    maxy: 48.118544
+  acquisition_date: '2026-09-15'
+  default_visible: false
+  default_opacity: 0.7
+  default_order: 41
+  min_zoom: 11
+  max_zoom: 20
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: nutzung
+    opacity: 0.7
+  legend:
+    type: categorical
+    palette:
+    - '#f59e0b'
+    - '#6b7280'
+    - '#a855f7'
+    - '#84cc16'
+    - '#eab308'
+    - '#15803d'
+    - '#22c55e'
+    - '#3b82f6'
+    - '#06b6d4'
+    - '#475569'
+    - '#334155'
+    - '#94a3b8'
+    - '#cbd5e1'
+    - '#65a30d'
+    - '#f97316'
+    - '#92400e'
+    - '#78716c'
+    labels:
+    - Wohnbaufläche
+    - Industrie- und Gewerbefläche
+    - Fläche gemischter Nutzung
+    - Sport-, Freizeit- und Erholungsfläche
+    - Landwirtschaft
+    - Wald
+    - Gehölz
+    - Stehendes Gewässer
+    - Fließgewässer
+    - Straßenverkehr
+    - Bahnverkehr
+    - Weg
+    - Platz
+    - Friedhof
+    - Fläche besonderer funktionaler Prägung
+    - Tagebau, Grube, Steinbruch
+    - Unland/Vegetationslose Fläche
+  analysis_capabilities:
+  - point_value
+  tags:
+  - alkis
+  - land-use
+  - nutzung
+  - planegg
+  is_demo: false
+- id: lst-relative-summer-2024
+  title: Relative Summer LST Anomaly 2024
+  short_title: LST anomaly 2024
+  description: Relative summer LST anomaly for Planegg (2024 summer mean anomaly around Planegg mean, °C).
+  layer_type: raster
+  thematic_group: Heat
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/relative_summer_lst/lst_relative_summer_anomaly_2024.tif
+  data_format: geotiff
+  source: Landsat 8/9 Collection 2 Level 2 (LANDSAT/LC08-09/C02/T1_L2), Google Earth Engine
+  attribution: USGS/NASA Landsat, processed via Google Earth Engine
+  units: °C
+  value_type: continuous
+  native_crs: EPSG:4326
+  acquisition_date: '2024-08-31'
+  temporal_start: '2024-06-01'
+  temporal_end: '2024-08-31'
+  temporal_group: relative_summer_lst
+  temporal_metric: anomaly_degC
+  temporal_year: 2024
+  spatial_resolution: 30
+  nodata: 0
+  value_range:
+    minimum: -10
+    maximum: 10
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 144
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: temperature
+    interpolation: nearest
+    opacity: 0.75
+  legend: *id001
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - heat
+  - lst
+  - landsat
+  - relative-summer-lst
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lst-relative-summer-2025
+  title: Relative Summer LST Anomaly 2025
+  short_title: LST anomaly 2025
+  description: Relative summer LST anomaly for Planegg (2025 summer mean anomaly around Planegg mean, °C).
+  layer_type: raster
+  thematic_group: Heat
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/relative_summer_lst/lst_relative_summer_anomaly_2025.tif
+  data_format: geotiff
+  source: Landsat 8/9 Collection 2 Level 2 (LANDSAT/LC08-09/C02/T1_L2), Google Earth Engine
+  attribution: USGS/NASA Landsat, processed via Google Earth Engine
+  units: °C
+  value_type: continuous
+  native_crs: EPSG:4326
+  acquisition_date: '2025-08-31'
+  temporal_start: '2025-06-01'
+  temporal_end: '2025-08-31'
+  temporal_group: relative_summer_lst
+  temporal_metric: anomaly_degC
+  temporal_year: 2025
+  spatial_resolution: 30
+  nodata: 0
+  value_range:
+    minimum: -10
+    maximum: 10
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 145
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: temperature
+    interpolation: nearest
+    opacity: 0.75
+  legend: *id001
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - heat
+  - lst
+  - landsat
+  - relative-summer-lst
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lst-relative-summer-2026
+  title: Relative Summer LST Anomaly 2026
+  short_title: LST anomaly 2026
+  description: Relative summer LST anomaly for Planegg (2026 summer mean anomaly around Planegg mean, °C).
+  layer_type: raster
+  thematic_group: Heat
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/relative_summer_lst/lst_relative_summer_anomaly_2026.tif
+  data_format: geotiff
+  source: Landsat 8/9 Collection 2 Level 2 (LANDSAT/LC08-09/C02/T1_L2), Google Earth Engine
+  attribution: USGS/NASA Landsat, processed via Google Earth Engine
+  units: °C
+  value_type: continuous
+  native_crs: EPSG:4326
+  acquisition_date: '2026-08-31'
+  temporal_start: '2026-06-01'
+  temporal_end: '2026-08-31'
+  temporal_group: relative_summer_lst
+  temporal_metric: anomaly_degC
+  temporal_year: 2026
+  spatial_resolution: 30
+  nodata: 0
+  value_range:
+    minimum: -10
+    maximum: 10
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 146
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: temperature
+    interpolation: linear
+    opacity: 0.75
+  legend: *id001
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - heat
+  - lst
+  - landsat
+  - relative-summer-lst
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2016
+  title: Planegg Land Cover Classes 2016
+  short_title: LULC 2016
+  description: Dominant land-cover class (annual mode composite, 2016) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2016.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2016-12-31'
+  temporal_start: '2016-01-01'
+  temporal_end: '2016-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2016
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 210
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2017
+  title: Planegg Land Cover Classes 2017
+  short_title: LULC 2017
+  description: Dominant land-cover class (annual mode composite, 2017) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2017.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2017-12-31'
+  temporal_start: '2017-01-01'
+  temporal_end: '2017-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2017
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 211
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2018
+  title: Planegg Land Cover Classes 2018
+  short_title: LULC 2018
+  description: Dominant land-cover class (annual mode composite, 2018) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2018.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2018-12-31'
+  temporal_start: '2018-01-01'
+  temporal_end: '2018-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2018
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 212
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2019
+  title: Planegg Land Cover Classes 2019
+  short_title: LULC 2019
+  description: Dominant land-cover class (annual mode composite, 2019) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2019.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2019-12-31'
+  temporal_start: '2019-01-01'
+  temporal_end: '2019-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2019
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 213
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2020
+  title: Planegg Land Cover Classes 2020
+  short_title: LULC 2020
+  description: Dominant land-cover class (annual mode composite, 2020) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2020.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2020-12-31'
+  temporal_start: '2020-01-01'
+  temporal_end: '2020-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2020
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 214
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2021
+  title: Planegg Land Cover Classes 2021
+  short_title: LULC 2021
+  description: Dominant land-cover class (annual mode composite, 2021) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2021.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2021-12-31'
+  temporal_start: '2021-01-01'
+  temporal_end: '2021-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2021
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 215
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2022
+  title: Planegg Land Cover Classes 2022
+  short_title: LULC 2022
+  description: Dominant land-cover class (annual mode composite, 2022) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2022.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2022-12-31'
+  temporal_start: '2022-01-01'
+  temporal_end: '2022-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2022
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 216
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2023
+  title: Planegg Land Cover Classes 2023
+  short_title: LULC 2023
+  description: Dominant land-cover class (annual mode composite, 2023) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2023.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2023-12-31'
+  temporal_start: '2023-01-01'
+  temporal_end: '2023-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2023
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 217
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2024
+  title: Planegg Land Cover Classes 2024
+  short_title: LULC 2024
+  description: Dominant land-cover class (annual mode composite, 2024) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2024.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2024-12-31'
+  temporal_start: '2024-01-01'
+  temporal_end: '2024-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2024
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 218
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: lulc-planegg-2025
+  title: Planegg Land Cover Classes 2025
+  short_title: LULC 2025
+  description: Dominant land-cover class (annual mode composite, 2025) from Google Dynamic World V1.
+  layer_type: raster
+  thematic_group: Land Cover
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/lulc_yearly/lulc_2025.tif
+  data_format: geotiff
+  source: Google Dynamic World V1 (GOOGLE/DYNAMICWORLD/V1), Google Earth Engine
+  attribution: Google Dynamic World, processed via Google Earth Engine
+  units: class
+  value_type: categorical
+  native_crs: EPSG:4326
+  acquisition_date: '2025-12-31'
+  temporal_start: '2025-01-01'
+  temporal_end: '2025-12-31'
+  temporal_group: lulc_yearly
+  temporal_metric: dominant_class
+  temporal_year: 2025
+  spatial_resolution: 10
+  nodata: -2147483648
+  value_range:
+    minimum: 0
+    maximum: 8
+  default_visible: false
+  default_opacity: 0.8
+  default_order: 219
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: true
+  selectable: true
+  style:
+    color_scale: categorical
+    interpolation: nearest
+    opacity: 0.8
+  legend:
+    type: categorical
+    palette:
+    - '#419BDF'
+    - '#397D49'
+    - '#88B053'
+    - '#7A87C6'
+    - '#E49635'
+    - '#DFC35A'
+    - '#C4281B'
+    - '#A59B8F'
+    - '#B39FE1'
+    labels:
+    - Water
+    - Trees
+    - Grass
+    - Flooded vegetation
+    - Crops
+    - Shrub & scrub
+    - Built area
+    - Bare ground
+    - Snow & ice
+  analysis_capabilities:
+  - point_value
+  - area_statistics
+  tags:
+  - land-cover
+  - lulc
+  - dynamic-world
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2016
+  title: Planegg Sentinel-2 RGB Composite 2016
+  short_title: RGB 2016
+  description: Sentinel-2 true-color yearly median composite (2016-04-01 to 2016-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2016.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2016-10-31'
+  temporal_start: '2016-04-01'
+  temporal_end: '2016-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2016
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 260
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2017
+  title: Planegg Sentinel-2 RGB Composite 2017
+  short_title: RGB 2017
+  description: Sentinel-2 true-color yearly median composite (2017-04-01 to 2017-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2017.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2017-10-31'
+  temporal_start: '2017-04-01'
+  temporal_end: '2017-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2017
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 261
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2018
+  title: Planegg Sentinel-2 RGB Composite 2018
+  short_title: RGB 2018
+  description: Sentinel-2 true-color yearly median composite (2018-04-01 to 2018-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2018.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2018-10-31'
+  temporal_start: '2018-04-01'
+  temporal_end: '2018-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2018
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 262
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2019
+  title: Planegg Sentinel-2 RGB Composite 2019
+  short_title: RGB 2019
+  description: Sentinel-2 true-color yearly median composite (2019-04-01 to 2019-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2019.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2019-10-31'
+  temporal_start: '2019-04-01'
+  temporal_end: '2019-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2019
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 263
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2020
+  title: Planegg Sentinel-2 RGB Composite 2020
+  short_title: RGB 2020
+  description: Sentinel-2 true-color yearly median composite (2020-04-01 to 2020-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2020.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2020-10-31'
+  temporal_start: '2020-04-01'
+  temporal_end: '2020-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2020
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 264
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2021
+  title: Planegg Sentinel-2 RGB Composite 2021
+  short_title: RGB 2021
+  description: Sentinel-2 true-color yearly median composite (2021-04-01 to 2021-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2021.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2021-10-31'
+  temporal_start: '2021-04-01'
+  temporal_end: '2021-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2021
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 265
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2022
+  title: Planegg Sentinel-2 RGB Composite 2022
+  short_title: RGB 2022
+  description: Sentinel-2 true-color yearly median composite (2022-04-01 to 2022-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2022.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2022-10-31'
+  temporal_start: '2022-04-01'
+  temporal_end: '2022-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2022
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 266
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2023
+  title: Planegg Sentinel-2 RGB Composite 2023
+  short_title: RGB 2023
+  description: Sentinel-2 true-color yearly median composite (2023-04-01 to 2023-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2023.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2023-10-31'
+  temporal_start: '2023-04-01'
+  temporal_end: '2023-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2023
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 267
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2024
+  title: Planegg Sentinel-2 RGB Composite 2024
+  short_title: RGB 2024
+  description: Sentinel-2 true-color yearly median composite (2024-04-01 to 2024-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2024.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2024-10-31'
+  temporal_start: '2024-04-01'
+  temporal_end: '2024-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2024
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 268
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false
+- id: rgb-sentinel-planegg-2025
+  title: Planegg Sentinel-2 RGB Composite 2025
+  short_title: RGB 2025
+  description: Sentinel-2 true-color yearly median composite (2025-04-01 to 2025-10-31), aligned with Dynamic World LULC season.
+  layer_type: raster
+  thematic_group: Basemap
+  area: planegg
+  storage_backend: local
+  relative_path: rasters/derived/planegg/rgb_yearly/rgb_2025.tif
+  data_format: geotiff
+  source: Sentinel-2 SR Harmonized (COPERNICUS/S2_SR_HARMONIZED), Google Earth Engine
+  attribution: Copernicus Sentinel-2 / ESA, processed via Google Earth Engine
+  units: RGB reflectance
+  value_type: rgb
+  native_crs: EPSG:4326
+  acquisition_date: '2025-10-31'
+  temporal_start: '2025-04-01'
+  temporal_end: '2025-10-31'
+  temporal_group: rgb_yearly
+  temporal_metric: median_reflectance
+  temporal_year: 2025
+  spatial_resolution: 10
+  nodata: 0
+  default_visible: false
+  default_opacity: 0.75
+  default_order: 269
+  min_zoom: 8
+  max_zoom: 18
+  inspectable: false
+  selectable: false
+  style:
+    color_scale: rgb
+    interpolation: linear
+    opacity: 0.75
+  legend:
+    type: categorical
+    palette:
+    - '#000000'
+    labels:
+    - True-color imagery
+  analysis_capabilities: []
+  tags:
+  - rgb
+  - sentinel-rgb
+  - sentinel-2
+  - planegg
+  - timeseries
+  is_demo: false

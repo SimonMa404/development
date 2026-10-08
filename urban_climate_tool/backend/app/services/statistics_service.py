@@ -8,8 +8,10 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+from rasterio import features as rasterio_features
 from rasterio.mask import mask as rasterio_mask
 from shapely.geometry import box, shape
+from shapely.ops import unary_union
 
 from app.core.config import settings
 from app.core.errors import LayerUnavailableError
@@ -664,6 +666,166 @@ class StatisticsService:
             },
             "classes": classes,
         }
+
+    def change_detection(self, from_layer_id: str, to_layer_id: str) -> dict[str, Any]:
+        from_layer = self.catalog_service.get_by_id(from_layer_id)
+        to_layer = self.catalog_service.get_by_id(to_layer_id)
+
+        from_path = settings.data_root_path / from_layer.relative_path
+        to_path = settings.data_root_path / to_layer.relative_path
+        if not from_path.exists() or not to_path.exists():
+            raise LayerUnavailableError("One or both rasters unavailable")
+
+        with rasterio.open(from_path) as from_src, rasterio.open(to_path) as to_src:
+            from_data = from_src.read(1)
+            to_data = to_src.read(1)
+
+            if from_data.shape != to_data.shape:
+                raise ValueError("Rasters have mismatched dimensions")
+
+            from_nodata = from_src.nodata
+            to_nodata = to_src.nodata
+            from_valid = from_data != from_nodata if from_nodata is not None else np.ones(from_data.shape, dtype=bool)
+            to_valid = to_data != to_nodata if to_nodata is not None else np.ones(to_data.shape, dtype=bool)
+            both_valid = from_valid & to_valid
+
+            from_flat = from_data[both_valid].astype(int)
+            to_flat = to_data[both_valid].astype(int)
+            changed_mask = both_valid & (from_data != to_data)
+
+            transitions: dict[tuple[int, int], int] = {}
+            for from_class, to_class in zip(from_flat, to_flat):
+                key = (int(from_class), int(to_class))
+                transitions[key] = transitions.get(key, 0) + 1
+
+            from_year = from_layer.temporal_year or (
+                int(from_layer.acquisition_date[:4]) if from_layer.acquisition_date and len(from_layer.acquisition_date) >= 4 else 0
+            )
+            to_year = to_layer.temporal_year or (
+                int(to_layer.acquisition_date[:4]) if to_layer.acquisition_date and len(to_layer.acquisition_date) >= 4 else 0
+            )
+
+            legend = from_layer.legend
+            if legend is None:
+                labels = []
+                palette = []
+            elif isinstance(legend, dict):
+                labels = legend.get("labels", []) or []
+                palette = legend.get("palette", []) or []
+            else:
+                labels = list(getattr(legend, "labels", []) or [])
+                palette = list(getattr(legend, "palette", []) or [])
+
+            pixel_area_hectares = 0.01  # Dynamic World 10m pixels
+            valid_pixel_count = int(both_valid.sum())
+            total_area_hectares = valid_pixel_count * pixel_area_hectares
+
+            transition_rows: list[dict[str, Any]] = []
+            transition_share_by_pair: dict[tuple[int, int], float] = {}
+            changed_pixel_count = 0
+            for (from_index, to_index), pixel_count in sorted(transitions.items()):
+                if from_index == to_index:
+                    continue
+
+                changed_pixel_count += pixel_count
+                area_hectares = pixel_count * pixel_area_hectares
+                share_pct = (area_hectares / total_area_hectares * 100.0) if total_area_hectares > 0 else 0.0
+                if share_pct >= 1.0:
+                    confidence_level = "high"
+                    confidence_color = "#ef4444"
+                elif share_pct >= 0.25:
+                    confidence_level = "medium"
+                    confidence_color = "#f97316"
+                else:
+                    confidence_level = "low"
+                    confidence_color = "#facc15"
+
+                transition_share_by_pair[(from_index, to_index)] = share_pct
+                transition_rows.append(
+                    {
+                        "from_class_index": from_index,
+                        "from_class_label": labels[from_index] if from_index < len(labels) else f"Class {from_index}",
+                        "from_class_color": palette[from_index] if from_index < len(palette) else "#94a3b8",
+                        "to_class_index": to_index,
+                        "to_class_label": labels[to_index] if to_index < len(labels) else f"Class {to_index}",
+                        "to_class_color": palette[to_index] if to_index < len(palette) else "#94a3b8",
+                        "pixel_count": pixel_count,
+                        "area_hectares": area_hectares,
+                        "share_pct": share_pct,
+                        "confidence_level": confidence_level,
+                        "confidence_color": confidence_color,
+                    }
+                )
+
+            transition_rows.sort(key=lambda row: row["area_hectares"], reverse=True)
+
+            changed_areas_geojson: dict[str, Any] | None = None
+            if np.any(changed_mask):
+                confidence_mask = np.zeros(from_data.shape, dtype=np.uint8)
+                for (from_index, to_index), share_pct in transition_share_by_pair.items():
+                    class_mask = both_valid & (from_data == from_index) & (to_data == to_index)
+                    if share_pct >= 1.0:
+                        confidence_mask[class_mask] = 3
+                    elif share_pct >= 0.25:
+                        confidence_mask[class_mask] = 2
+                    else:
+                        confidence_mask[class_mask] = 1
+
+                features = []
+                for geom, value in rasterio_features.shapes(
+                    confidence_mask,
+                    mask=confidence_mask > 0,
+                    transform=from_src.transform,
+                ):
+                    confidence_value = int(value)
+                    if confidence_value == 3:
+                        confidence_level = "high"
+                        confidence_color = "#ef4444"
+                    elif confidence_value == 2:
+                        confidence_level = "medium"
+                        confidence_color = "#f97316"
+                    else:
+                        confidence_level = "low"
+                        confidence_color = "#facc15"
+
+                    features.append(
+                        {
+                            "type": "Feature",
+                            "properties": {
+                                "confidence_level": confidence_level,
+                                "confidence_color": confidence_color,
+                            },
+                            "geometry": geom,
+                        }
+                    )
+
+                if features:
+                    changed_areas_geojson = {"type": "FeatureCollection", "features": features}
+
+            changed_area_hectares = changed_pixel_count * pixel_area_hectares
+            changed_share_pct = (changed_pixel_count / valid_pixel_count * 100.0) if valid_pixel_count > 0 else 0.0
+            low_share = sum(row["share_pct"] for row in transition_rows if row["confidence_level"] == "low")
+            medium_share = sum(row["share_pct"] for row in transition_rows if row["confidence_level"] == "medium")
+            high_share = sum(row["share_pct"] for row in transition_rows if row["confidence_level"] == "high")
+
+            return {
+                "from_layer_id": from_layer_id,
+                "to_layer_id": to_layer_id,
+                "from_year": from_year,
+                "to_year": to_year,
+                "title": f"LULC Change {from_year} → {to_year}",
+                "total_area_hectares": total_area_hectares,
+                "changed_area_hectares": changed_area_hectares,
+                "changed_share_pct": changed_share_pct,
+                "uncertainty_share_pct": low_share,
+                "certainty_by_level_pct": {
+                    "high": high_share,
+                    "medium": medium_share,
+                    "low": low_share,
+                },
+                "changed_areas_geojson": changed_areas_geojson,
+                "transitions": transition_rows,
+            }
 
     @staticmethod
     @lru_cache(maxsize=8)

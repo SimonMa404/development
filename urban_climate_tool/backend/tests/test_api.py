@@ -72,3 +72,13 @@ def test_heat_vulnerability_endpoint() -> None:
     assert "result" in body
     assert "summary" in body["result"]
     assert "lst_exposure_bins" in body["result"]
+
+
+def test_relative_summer_lst_series_endpoint() -> None:
+    response = client.get("/api/layers/time-series/lst-relative-summer?include_unavailable=true")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metric"] == "relative_summer_lst_anomaly"
+    assert payload["temporal_group"] == "relative_summer_lst"
+    assert "points" in payload
+    assert isinstance(payload["points"], list)

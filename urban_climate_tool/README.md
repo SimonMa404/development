@@ -87,6 +87,27 @@ The backend validates the catalog on startup. It verifies:
 - file-format compatibility with layer type
 - valid legend/style metadata
 
+## Register yearly relative summer LST layers
+
+When yearly relative summer LST GeoTIFFs are available in storage, use:
+
+```bash
+python scripts/register_relative_summer_lst_layers.py
+```
+
+This runs in dry-run mode and prints planned creates/updates.
+
+Write changes to `catalog/layers.yaml` with:
+
+```bash
+python scripts/register_relative_summer_lst_layers.py --apply
+```
+
+Optional:
+- `--overwrite-existing` to replace already registered yearly entries.
+- `--summary-csv` to point to a custom yearly summary CSV.
+- `--rasters-dir` to point to a custom yearly raster directory.
+
 ## Generating the placeholder raster
 
 Run:

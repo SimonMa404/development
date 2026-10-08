@@ -50,6 +50,9 @@ class LayerCatalogEntry(BaseModel):
     acquisition_date: str | None = None
     temporal_start: str | None = None
     temporal_end: str | None = None
+    temporal_group: str | None = None
+    temporal_metric: str | None = None
+    temporal_year: int | None = None
     spatial_resolution: float | int | None = None
     nodata: float | int | None = None
     value_range: ValueRange | None = None

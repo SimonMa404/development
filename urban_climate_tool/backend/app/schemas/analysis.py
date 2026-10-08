@@ -247,3 +247,49 @@ class PointSampleResponse(BaseModel):
     units: str | None = None
     valid: bool = True
     nodata: bool = False
+
+
+class TransitionMatrixCell(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_class_index: int
+    from_class_label: str
+    from_class_color: str
+    to_class_index: int
+    to_class_label: str
+    to_class_color: str
+    pixel_count: int
+    area_hectares: float
+    share_pct: float
+    confidence_level: str
+    confidence_color: str
+
+
+class ChangeDetectionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_layer_id: str
+    to_layer_id: str
+    from_year: int
+    to_year: int
+    title: str | None = None
+    total_area_hectares: float
+    changed_area_hectares: float
+    changed_share_pct: float
+    uncertainty_share_pct: float
+    certainty_by_level_pct: dict[str, float] = Field(default_factory=dict)
+    changed_areas_geojson: dict | None = None
+    transitions: list[TransitionMatrixCell]
+
+
+class ChangeDetectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_layer_id: str
+    to_layer_id: str
+
+
+class ChangeDetectionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: ChangeDetectionResult

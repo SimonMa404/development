@@ -10,6 +10,8 @@ from app.schemas.analysis import (
     BuildingContextResponse,
     BuildingOverviewRequest,
     BuildingOverviewResponse,
+    ChangeDetectionRequest,
+    ChangeDetectionResponse,
     HeatVulnerabilityRequest,
     HeatVulnerabilityResponse,
     LandUseCompositionRequest,
@@ -110,3 +112,17 @@ def land_use_composition(payload: LandUseCompositionRequest) -> LandUseCompositi
     except LayerUnavailableError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return LandUseCompositionResponse(result=result)
+
+
+@router.post("/analysis/change-detection", response_model=ChangeDetectionResponse)
+def change_detection(payload: ChangeDetectionRequest) -> ChangeDetectionResponse:
+    service = StatisticsService(CatalogService())
+    try:
+        result = service.change_detection(payload.from_layer_id, payload.to_layer_id)
+    except LayerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LayerUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ChangeDetectionResponse(result=result)

@@ -10,13 +10,14 @@ from app.services.catalog_service import CatalogService
 from app.services.raster_service import RasterService
 
 router = APIRouter()
+catalog_service = CatalogService()
+raster_service = RasterService(catalog_service)
 
 
 @router.get("/tiles/{layer_id}/{z}/{x}/{y}.png")
 def get_raster_tile(layer_id: str, z: int, x: int, y: int) -> Response:
-    service = RasterService(CatalogService())
     try:
-        tile_bytes, content_type = service.get_tile(layer_id, z, x, y)
+        tile_bytes, content_type = raster_service.get_tile(layer_id, z, x, y)
     except LayerNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except LayerUnavailableError as exc:
@@ -34,9 +35,8 @@ def get_raster_tile(layer_id: str, z: int, x: int, y: int) -> Response:
 
 @router.get("/rasters/{layer_id}/point")
 def sample_raster_point(layer_id: str, lon: float = Query(...), lat: float = Query(...)) -> dict[str, Any]:
-    service = RasterService(CatalogService())
     try:
-        return service.sample_point(layer_id, lon, lat)
+        return raster_service.sample_point(layer_id, lon, lat)
     except LayerNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except LayerUnavailableError as exc:
@@ -45,10 +45,9 @@ def sample_raster_point(layer_id: str, lon: float = Query(...), lat: float = Que
 
 @router.get("/terrain/status")
 def terrain_status(source: str = Query(default="dem")) -> dict[str, Any]:
-    service = RasterService(CatalogService())
-    sources = service.terrain_sources_available()
+    sources = raster_service.terrain_sources_available()
     return {
-        "available": service.terrain_available(source),
+        "available": raster_service.terrain_available(source),
         "source": source,
         "sources": sources,
     }
@@ -56,9 +55,8 @@ def terrain_status(source: str = Query(default="dem")) -> dict[str, Any]:
 
 @router.get("/terrain/{z}/{x}/{y}.png")
 def get_terrain_tile(z: int, x: int, y: int, source: str = Query(default="dem")) -> Response:
-    service = RasterService(CatalogService())
     try:
-        tile_bytes, content_type = service.get_terrain_tile(z, x, y, source=source)
+        tile_bytes, content_type = raster_service.get_terrain_tile(z, x, y, source=source)
     except LayerUnavailableError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -66,7 +64,7 @@ def get_terrain_tile(z: int, x: int, y: int, source: str = Query(default="dem"))
         content=tile_bytes,
         media_type=content_type,
         headers={
-            "Cache-Control": "public, max-age=3600",
+            "Cache-Control": "public, max-age=86400, immutable",
             "X-Content-Type-Options": "nosniff",
         },
     )

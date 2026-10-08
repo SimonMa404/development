@@ -35,6 +35,11 @@ export type CatalogLayer = {
   native_crs?: string;
   bounds?: Record<string, number>;
   acquisition_date?: string;
+  temporal_start?: string;
+  temporal_end?: string;
+  temporal_group?: string;
+  temporal_metric?: string;
+  temporal_year?: number;
   spatial_resolution?: number;
   nodata?: number;
   value_range?: LayerValueRange;

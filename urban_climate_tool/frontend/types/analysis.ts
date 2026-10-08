@@ -186,3 +186,76 @@ export type LandUseCompositionRequest = {
 export type LandUseCompositionResponse = {
   result: LandUseCompositionResult;
 };
+
+export type RelativeSummerLstPoint = {
+  year: number;
+  layer_id: string;
+  title: string;
+  units?: string | null;
+  mean_anomaly_deg_c?: number | null;
+  n_scenes?: number | null;
+  mean_scene_lst_deg_c?: number | null;
+  available: boolean;
+};
+
+export type RelativeSummerLstSeriesResponse = {
+  metric: string;
+  temporal_group: string;
+  csv_relative_path?: string | null;
+  points: RelativeSummerLstPoint[];
+};
+
+export type LulcChangePoint = {
+  year: number;
+  layer_id: string;
+  title: string;
+  built_area_hectares?: number | null;
+  total_area_hectares?: number | null;
+  class_areas_hectares?: Record<string, number> | null;
+  available: boolean;
+};
+
+export type LulcChangeSeriesResponse = {
+  metric: string;
+  temporal_group: string;
+  csv_relative_path?: string | null;
+  points: LulcChangePoint[];
+};
+
+export type ChangeDetectionTransition = {
+  from_class_index: number;
+  from_class_label: string;
+  from_class_color: string;
+  to_class_index: number;
+  to_class_label: string;
+  to_class_color: string;
+  pixel_count: number;
+  area_hectares: number;
+  share_pct: number;
+  confidence_level: "low" | "medium" | "high";
+  confidence_color: string;
+};
+
+export type ChangeDetectionResult = {
+  from_layer_id: string;
+  to_layer_id: string;
+  from_year: number;
+  to_year: number;
+  title?: string;
+  total_area_hectares: number;
+  changed_area_hectares: number;
+  changed_share_pct: number;
+  uncertainty_share_pct: number;
+  certainty_by_level_pct: Record<"low" | "medium" | "high", number>;
+  changed_areas_geojson?: Record<string, unknown> | null;
+  transitions: ChangeDetectionTransition[];
+};
+
+export type ChangeDetectionRequest = {
+  from_layer_id: string;
+  to_layer_id: string;
+};
+
+export type ChangeDetectionResponse = {
+  result: ChangeDetectionResult;
+};
