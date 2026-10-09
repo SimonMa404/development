@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
-import { MapCanvas, type BasemapId, type TerrainSourceId } from "@/components/map/MapCanvas";
+import { MapCanvas, type BasemapId, type SatelliteBasemapSource, type TerrainSourceId } from "@/components/map/MapCanvas";
 import { MapLegend } from "@/components/map/MapLegend";
 import { BasemapSwitcher } from "@/components/map/BasemapSwitcher";
 import { LayerPanel } from "@/components/layers/LayerPanel";
@@ -15,12 +15,12 @@ import { CollapsiblePanel } from "@/components/layout/CollapsiblePanel";
 import { useLayerCatalog } from "@/hooks/useLayerCatalog";
 import { useLulcChangeSeries } from "@/hooks/useLulcChangeSeries";
 import { useRelativeSummerLstSeries } from "@/hooks/useRelativeSummerLstSeries";
-import { useAreaStatistics } from "@/hooks/useAreaStatistics";
 import {
   fetchAreaStatistics,
+  fetchBuildingStatistics,
   fetchBuildingContext,
-  fetchBuildingsOverview,
   fetchChangeDetection,
+  fetchElevationStatistics,
   fetchHeatVulnerability,
   fetchLandUseComposition,
   fetchTreeStatistics,
@@ -28,10 +28,11 @@ import {
 import { API_BASE_URL, fetchJson } from "@/lib/api/client";
 import type {
   AreaStatisticsResponse,
+  BuildingStatisticsResult,
   BuildingContextResponse,
   ChangeDetectionResult,
-  BuildingOverviewLayerStatistics,
   ChangeDetectionResponse,
+  ElevationStatisticsResult,
   HeatVulnerabilityResult,
   LandUseCompositionResult,
   LayerAreaStatistics,
@@ -108,9 +109,40 @@ type DrawnPolygonGeometry = {
   type: "Polygon";
   coordinates: number[][][];
 };
+type HourlyShadeOption = {
+  layerId: string;
+  title: string;
+  dateKey: string;
+  timeKey: string;
+};
 type SwipeLayerSelection = "from-rgb" | "to-rgb" | "from-lulc" | "to-lulc";
 type EffectiveTerrainMode = "off" | "dem" | "dom" | "dsm";
 const LEGACY_LULC_LAYER_ID = "lulc-planegg";
+
+function formatShadeTimeLabel(timeKey: string): string {
+  if (typeof timeKey !== "string" || timeKey.length !== 4) return String(timeKey ?? "");
+  return `${timeKey.slice(0, 2)}:${timeKey.slice(2, 4)}`;
+}
+
+function formatShadeDateLabel(dateKey: string): string {
+  if (dateKey.length !== 8) return dateKey;
+  return `${dateKey.slice(0, 4)}-${dateKey.slice(4, 6)}-${dateKey.slice(6, 8)}`;
+}
+
+function formatShadeDateLongLabel(dateKey: string): string {
+  if (!/^\d{8}$/.test(dateKey)) return dateKey;
+  const year = Number(dateKey.slice(0, 4));
+  const month = Number(dateKey.slice(4, 6));
+  const day = Number(dateKey.slice(6, 8));
+  const date = new Date(year, month - 1, day, 12, 0, 0);
+  if (Number.isNaN(date.getTime())) return dateKey;
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
 
 export default function HomePage() {
   const { data: catalogLayers, isLoading, error } = useLayerCatalog();
@@ -121,6 +153,7 @@ export default function HomePage() {
   const [drawnPoints, setDrawnPoints] = useState<[number, number][]>([]);
   const [drawnGeometry, setDrawnGeometry] = useState<DrawnPolygonGeometry | null>(null);
   const [basemap, setBasemap] = useState<BasemapId>("satellite");
+  const [satelliteBasemapSource, setSatelliteBasemapSource] = useState<SatelliteBasemapSource>("bayern-20cm");
   const [terrain3dEnabled, setTerrain3dEnabled] = useState(false);
   const [terrainSource, setTerrainSource] = useState<TerrainSourceId>("dem");
   const [effectiveTerrainMode, setEffectiveTerrainMode] = useState<EffectiveTerrainMode>("off");
@@ -130,7 +163,8 @@ export default function HomePage() {
   const [terrainExaggeration, setTerrainExaggeration] = useState(1.8);
   const [hillshadeStrength, setHillshadeStrength] = useState(0.7);
   const [layersPanelOpen, setLayersPanelOpen] = useState(true);
-  const [comparisonPanelOpen, setComparisonPanelOpen] = useState(true);
+  const [comparisonPanelOpen, setComparisonPanelOpen] = useState(false);
+  const [shadeSimulationPanelOpen, setShadeSimulationPanelOpen] = useState(false);
   const [analysisPanelOpen, setAnalysisPanelOpen] = useState(true);
   const [analysisView, setAnalysisView] = useState<"planegg" | "drawn">("planegg");
   const [dashboardMode, setDashboardMode] = useState<"analysis" | "heat-development" | "land-cover-change">("analysis");
@@ -157,28 +191,49 @@ export default function HomePage() {
   const [layerComparePosition, setLayerComparePosition] = useState(0.5);
   const [layerCompareLeftId, setLayerCompareLeftId] = useState<string | null>(null);
   const [layerCompareRightId, setLayerCompareRightId] = useState<string | null>(null);
+  const [shadeSimulationEnabled, setShadeSimulationEnabled] = useState(false);
+  const [shadeSimulationPlaying, setShadeSimulationPlaying] = useState(false);
+  const [selectedHourlyShadeLayerId, setSelectedHourlyShadeLayerId] = useState<string | null>(null);
   const [changeDetectionResult, setChangeDetectionResult] = useState<ChangeDetectionResult | null>(null);
   const changeDetectionCacheRef = useRef<Record<string, ChangeDetectionResult>>({});
   const hasAutoSelectedSeriesRef = useRef(false);
+  const previousHourlyShadeLayerIdRef = useRef<string | null>(null);
   const [hasDrawnSelection, setHasDrawnSelection] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<SelectedBuilding | null>(null);
   const [selectedNutzung, setSelectedNutzung] = useState<SelectedNutzung | null>(null);
   const [allBuildingHeights, setAllBuildingHeights] = useState<number[]>([]);
-  const [overviewResults, setOverviewResults] = useState<LayerAreaStatistics[] | undefined>(undefined);
   const [overviewPending, setOverviewPending] = useState(false);
   const [overviewError, setOverviewError] = useState<Error | null>(null);
-  const [overviewBuildingStats, setOverviewBuildingStats] = useState<{ count: number; averageHeight: number } | null>(null);
-  const [overviewBuildingClimate, setOverviewBuildingClimate] = useState<BuildingOverviewLayerStatistics[]>([]);
+  const [overviewBuildingStats, setOverviewBuildingStats] = useState<BuildingStatisticsResult | null>(null);
+  const [overviewElevationStats, setOverviewElevationStats] = useState<ElevationStatisticsResult | null>(null);
   const [overviewVulnerability, setOverviewVulnerability] = useState<HeatVulnerabilityResult | null>(null);
   const [overviewTreeStats, setOverviewTreeStats] = useState<TreeStatisticsResult | null>(null);
   const [overviewLandUse, setOverviewLandUse] = useState<LandUseCompositionResult | null>(null);
   const [activeLayerOrder, setActiveLayerOrder] = useState<string[]>([]);
+  const [activeLayersExpanded, setActiveLayersExpanded] = useState(true);
   const [draggingActiveLayerId, setDraggingActiveLayerId] = useState<string | null>(null);
   const [activeDropTargetId, setActiveDropTargetId] = useState<string | null>(null);
   const domTerrainMode = effectiveTerrainMode === "dom" || effectiveTerrainMode === "dsm";
   const hasAnyTerrainSource = terrainSourcesAvailable.dem || terrainSourcesAvailable.dom || terrainSourcesAvailable.dsm;
 
-  const areaStatistics = useAreaStatistics();
+  const buildingStatistics = useMutation<BuildingStatisticsResult, Error, { geometry: DrawnPolygonGeometry }>({
+    mutationFn: async (payload) => {
+      const response = await fetchBuildingStatistics({
+        geometry: payload.geometry,
+        layer_id: "buildings-3d-planegg",
+      });
+      return response.result;
+    },
+  });
+  const elevationStatistics = useMutation<ElevationStatisticsResult, Error, { geometry: DrawnPolygonGeometry }>({
+    mutationFn: async (payload) => {
+      const response = await fetchElevationStatistics({
+        geometry: payload.geometry,
+        layer_id: "dsm-planegg",
+      });
+      return response.result;
+    },
+  });
   const buildingContext = useMutation<BuildingContextResponse, Error, { geometry: Record<string, unknown>; layer_ids: string[] }>({
     mutationFn: (payload) =>
       fetchBuildingContext({
@@ -360,18 +415,65 @@ export default function HomePage() {
 
   const availableCatalogLayers = useMemo(() => (catalogLayers ?? []).filter((layer) => layer.available), [catalogLayers]);
 
-  const inspectableRasterLayers = useMemo(
-    () => layers.filter((layer) => layer.layer_type === "raster" && layer.default_visible && layer.available),
-    [layers],
+  const hourlyShadeOptions = useMemo<HourlyShadeOption[]>(() => {
+    const parsed = availableCatalogLayers
+      .filter((layer) => layer.layer_type === "raster")
+      .flatMap((layer) => {
+        const match = /^shade-overpass-(\d{8})-(\d{4})$/.exec(layer.id);
+        if (match) {
+          return [{
+            layerId: layer.id,
+            title: layer.short_title ?? layer.title,
+            dateKey: match[1],
+            timeKey: match[2],
+          } satisfies HourlyShadeOption];
+        }
+
+        const pathMatch = /shade_overpass_(\d{4}-\d{2}-\d{2})_(\d{4})\.tif$/i.exec(layer.relative_path);
+        if (!pathMatch) return [];
+
+        return [{
+          layerId: layer.id,
+          title: layer.short_title ?? layer.title,
+          dateKey: pathMatch[1].replace(/-/g, ""),
+          timeKey: pathMatch[2],
+        } satisfies HourlyShadeOption];
+      });
+
+    return parsed.sort((a, b) => {
+      if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+      return a.timeKey.localeCompare(b.timeKey);
+    });
+  }, [availableCatalogLayers]);
+
+  const hourlyShadeLayerIds = useMemo(() => hourlyShadeOptions.map((option) => option.layerId), [hourlyShadeOptions]);
+
+  const selectedHourlyShadeIndex = useMemo(
+    () => hourlyShadeOptions.findIndex((option) => option.layerId === selectedHourlyShadeLayerId),
+    [hourlyShadeOptions, selectedHourlyShadeLayerId],
   );
 
-  const overviewLayerIds = useMemo(
-    () =>
-      availableCatalogLayers
-        .filter((layer) => layer.layer_type === "raster" && layer.inspectable)
-        .map((layer) => layer.id),
-    [availableCatalogLayers],
-  );
+  const selectedHourlyShadeOption = selectedHourlyShadeIndex >= 0 ? hourlyShadeOptions[selectedHourlyShadeIndex] : null;
+
+  const selectedHourlyShadeLabel = useMemo(() => {
+    if (!selectedHourlyShadeOption) return null;
+    return `${selectedHourlyShadeOption.title} (${formatShadeTimeLabel(selectedHourlyShadeOption.timeKey)})`;
+  }, [selectedHourlyShadeOption]);
+
+  const selectedHourlyShadeShortLabel = useMemo(() => {
+    if (!selectedHourlyShadeOption) return null;
+    return formatShadeTimeLabel(selectedHourlyShadeOption.timeKey);
+  }, [selectedHourlyShadeOption]);
+
+  const selectedHourlyShadeDateLabel = useMemo(() => {
+    if (!selectedHourlyShadeOption) return null;
+    return formatShadeDateLabel(selectedHourlyShadeOption.dateKey);
+  }, [selectedHourlyShadeOption]);
+
+  const selectedHourlyShadeDayLabel = useMemo(() => {
+    if (!selectedHourlyShadeOption) return null;
+    return formatShadeDateLongLabel(selectedHourlyShadeOption.dateKey);
+  }, [selectedHourlyShadeOption]);
 
   const legendLayers = useMemo(
     () =>
@@ -402,6 +504,107 @@ export default function HomePage() {
     });
   }, [layers]);
 
+  useEffect(() => {
+    if (hourlyShadeOptions.length === 0) {
+      setSelectedHourlyShadeLayerId(null);
+      setShadeSimulationEnabled(false);
+      setShadeSimulationPlaying(false);
+      return;
+    }
+    if (selectedHourlyShadeLayerId && hourlyShadeOptions.some((option) => option.layerId === selectedHourlyShadeLayerId)) return;
+    setSelectedHourlyShadeLayerId(hourlyShadeOptions[0].layerId);
+  }, [hourlyShadeOptions, selectedHourlyShadeLayerId]);
+
+  useEffect(() => {
+    if (!shadeSimulationPlaying || !shadeSimulationEnabled || hourlyShadeOptions.length === 0) return;
+
+    const interval = window.setInterval(() => {
+      setSelectedHourlyShadeLayerId((currentId) => {
+        const currentIndex = hourlyShadeOptions.findIndex((option) => option.layerId === currentId);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % hourlyShadeOptions.length : 0;
+        return hourlyShadeOptions[nextIndex]?.layerId ?? null;
+      });
+    }, 1100);
+
+    return () => window.clearInterval(interval);
+  }, [hourlyShadeOptions, shadeSimulationEnabled, shadeSimulationPlaying]);
+
+  useEffect(() => {
+    if (!shadeSimulationPlaying) return;
+    if (!shadeSimulationEnabled || hourlyShadeOptions.length === 0) {
+      setShadeSimulationPlaying(false);
+    }
+  }, [hourlyShadeOptions.length, shadeSimulationEnabled, shadeSimulationPlaying]);
+
+  useEffect(() => {
+    if (hourlyShadeLayerIds.length === 0) return;
+
+    setOverrides((prev) => {
+      const next = { ...prev };
+      for (const layerId of hourlyShadeLayerIds) {
+        next[layerId] = {
+          ...next[layerId],
+          default_visible: Boolean(shadeSimulationEnabled && selectedHourlyShadeLayerId === layerId),
+          default_opacity: next[layerId]?.default_opacity ?? 0.75,
+        };
+      }
+      return next;
+    });
+
+    if (shadeSimulationEnabled && selectedHourlyShadeLayerId) {
+      const previousId = previousHourlyShadeLayerIdRef.current;
+      setActiveLayerOrder((prev) => {
+        // Keep the new hour in the exact stack position where the previous hour was.
+        if (previousId && prev.includes(previousId)) {
+          const replaced = prev.map((id) => (id === previousId ? selectedHourlyShadeLayerId : id));
+          const deduped: string[] = [];
+          for (const id of replaced) {
+            if (!deduped.includes(id)) deduped.push(id);
+          }
+          return deduped;
+        }
+
+        // First activation: put shade directly below 3D buildings/trees and above all other layers.
+        const pinned3dIds = ["trees-3d-planegg", "buildings-3d-planegg"];
+        const withoutAnyShade = prev.filter((id) => !hourlyShadeLayerIds.includes(id));
+        const pinnedOnTop = withoutAnyShade.filter((id) => pinned3dIds.includes(id));
+        const remaining = withoutAnyShade.filter((id) => !pinned3dIds.includes(id));
+        return [...pinnedOnTop, selectedHourlyShadeLayerId, ...remaining];
+      });
+      previousHourlyShadeLayerIdRef.current = selectedHourlyShadeLayerId;
+      return;
+    }
+
+    previousHourlyShadeLayerIdRef.current = null;
+  }, [hourlyShadeLayerIds, shadeSimulationEnabled, selectedHourlyShadeLayerId]);
+
+  const handleShadeSimulationToggle = () => {
+    if (!shadeSimulationEnabled || hourlyShadeOptions.length === 0) return;
+    setShadeSimulationPlaying((value) => !value);
+  };
+
+  const handleShadeSimulationStart = () => {
+    if (hourlyShadeOptions.length === 0) return;
+    const nextShadeLayerId = selectedHourlyShadeLayerId ?? hourlyShadeOptions[0].layerId;
+
+    if (!shadeSimulationEnabled && nextShadeLayerId) {
+      previousHourlyShadeLayerIdRef.current = null;
+      setActiveLayerOrder((prev) => {
+        const pinned3dIds = ["trees-3d-planegg", "buildings-3d-planegg"];
+        const withoutAnyShade = prev.filter((id) => !hourlyShadeLayerIds.includes(id));
+        const pinnedOnTop = withoutAnyShade.filter((id) => pinned3dIds.includes(id));
+        const remaining = withoutAnyShade.filter((id) => !pinned3dIds.includes(id));
+        return [...pinnedOnTop, nextShadeLayerId, ...remaining];
+      });
+    }
+
+    setShadeSimulationEnabled(true);
+    setShadeSimulationPlaying(true);
+    if (!selectedHourlyShadeLayerId && nextShadeLayerId) {
+      setSelectedHourlyShadeLayerId(nextShadeLayerId);
+    }
+  };
+
   const activeLayers = useMemo(() => {
     const visibleMap = new Map(
       layers
@@ -416,28 +619,8 @@ export default function HomePage() {
     return [...ordered, ...remaining];
   }, [layers, activeLayerOrder]);
 
-  const censusVisible = useMemo(
-    () => layers.some((layer) => layer.id === "census-2022-100m-planegg" && layer.default_visible && layer.available),
-    [layers],
-  );
   const censusAvailable = useMemo(
     () => availableCatalogLayers.some((layer) => layer.id === "census-2022-100m-planegg"),
-    [availableCatalogLayers],
-  );
-  const lstVisible = useMemo(
-    () => layers.some((layer) => layer.id === "lst-planegg" && layer.default_visible && layer.available),
-    [layers],
-  );
-  const lstAvailable = useMemo(
-    () => availableCatalogLayers.some((layer) => layer.id === "lst-planegg"),
-    [availableCatalogLayers],
-  );
-  const ndviVisible = useMemo(
-    () => layers.some((layer) => layer.id === "ndvi-planegg" && layer.default_visible && layer.available),
-    [layers],
-  );
-  const ndviAvailable = useMemo(
-    () => availableCatalogLayers.some((layer) => layer.id === "ndvi-planegg"),
     [availableCatalogLayers],
   );
   const buildingsVisible = useMemo(
@@ -452,21 +635,13 @@ export default function HomePage() {
     () => availableCatalogLayers.some((layer) => layer.id === "trees-3d-planegg"),
     [availableCatalogLayers],
   );
-  const nutzungVisible = useMemo(
-    () => layers.some((layer) => layer.id === "nutzung-planegg" && layer.default_visible && layer.available),
-    [layers],
-  );
   const nutzungAvailable = useMemo(
     () => availableCatalogLayers.some((layer) => layer.id === "nutzung-planegg"),
     [availableCatalogLayers],
   );
-
-  const visibleRasterLayerIds = useMemo(
-    () =>
-      layers
-        .filter((layer) => layer.layer_type === "raster" && layer.default_visible && layer.available)
-        .map((layer) => layer.id),
-    [layers],
+  const dsmAvailable = useMemo(
+    () => availableCatalogLayers.some((layer) => layer.id === "dsm-planegg"),
+    [availableCatalogLayers],
   );
 
   const layerComparisonCandidates = useMemo(
@@ -532,15 +707,6 @@ export default function HomePage() {
     }
     setLayerCompareEnabled(enabled);
   }
-
-  const lstPalette = useMemo(
-    () => layers.find((layer) => layer.id === "lst-planegg")?.legend?.palette ?? ["#313695", "#4575b4", "#74add1", "#abd9e9", "#e0f3f8", "#fee090", "#fdae61", "#f46d43", "#d73027"],
-    [layers],
-  );
-  const ndviPalette = useMemo(
-    () => layers.find((layer) => layer.id === "ndvi-planegg")?.legend?.palette ?? ["#8B4513", "#d73027", "#fee08b", "#ffffbf", "#a6d96a", "#1a9850", "#00441b"],
-    [layers],
-  );
 
   const relativeSummerLayerIds = useMemo(
     () =>
@@ -608,6 +774,68 @@ export default function HomePage() {
     return labels.map((label, index) => ({ classKey: String(index), label, color: palette[index] ?? "#94a3b8" }));
   }, [availableCatalogLayers, lulcYearPoints, selectedLulcLayerId]);
 
+  const latestLulcSummary = useMemo(() => {
+    const latest = [...lulcYearPoints]
+      .filter((point) => point.available && point.classValues && Object.keys(point.classValues).length > 0)
+      .sort((a, b) => b.year - a.year)[0];
+
+    if (!latest?.classValues) return { year: null as number | null, items: [] as Array<{ key: string; label: string; color: string; value: number; unit: "ha" }> };
+
+    const layer = availableCatalogLayers.find((candidate) => candidate.id === latest.layerId);
+    const labels = layer?.legend?.labels ?? [];
+    const palette = layer?.legend?.palette ?? [];
+
+    const items = Object.entries(latest.classValues)
+      .map(([classKey, rawValue]) => {
+        const value = Number(rawValue);
+        const classIndex = Number(classKey);
+        if (!Number.isFinite(value) || value <= 0) return null;
+        return {
+          key: classKey,
+          label: labels[classIndex] ?? `Class ${classKey}`,
+          color: palette[classIndex] ?? "#94a3b8",
+          value,
+          unit: "ha" as const,
+        };
+      })
+      .filter((item): item is { key: string; label: string; color: string; value: number; unit: "ha" } => Boolean(item))
+      .sort((a, b) => b.value - a.value);
+
+    return { year: latest.year, items };
+  }, [lulcYearPoints, availableCatalogLayers]);
+
+  const drawnLandCoverSummary = useMemo(() => {
+    const results = drawnLulcSeriesStatistics.data?.results ?? [];
+    if (results.length === 0) {
+      return { year: null as number | null, items: [] as Array<{ key: string; label: string; color: string; value: number; unit: "ha" | "%" }> };
+    }
+
+    const fallbackLayerId = [...lulcYearPoints].reverse().find((point) => point.available)?.layerId ?? null;
+    const targetLayerId = selectedLulcLayerId ?? fallbackLayerId;
+    const target = (targetLayerId ? results.find((result) => result.layer_id === targetLayerId) : null) ?? results[0];
+    const classes = target?.selected.class_breakdown ?? [];
+    if (!target || classes.length === 0) {
+      return { year: null as number | null, items: [] as Array<{ key: string; label: string; color: string; value: number; unit: "ha" | "%" }> };
+    }
+
+    const layerMeta = availableCatalogLayers.find((layer) => layer.id === target.layer_id);
+    const spatialResolution = typeof layerMeta?.spatial_resolution === "number" ? layerMeta.spatial_resolution : null;
+    const pixelAreaHa = spatialResolution ? (spatialResolution * spatialResolution) / 10000 : null;
+    const year = lulcYearPoints.find((point) => point.layerId === target.layer_id)?.year ?? null;
+
+    const items = classes
+      .map((entry) => ({
+        key: String(entry.class_index),
+        label: entry.label,
+        color: entry.color,
+        value: pixelAreaHa ? entry.count * pixelAreaHa : entry.percentage,
+        unit: (pixelAreaHa ? "ha" : "%") as "ha" | "%",
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    return { year, items };
+  }, [drawnLulcSeriesStatistics.data?.results, selectedLulcLayerId, lulcYearPoints, availableCatalogLayers]);
+
   const rgbYearOptions = useMemo(() => {
     const optionsByYear = new Map<number, { layerId: string; title: string; available: boolean }>();
     const rgbCandidates = availableCatalogLayers.filter((layer) =>
@@ -619,7 +847,7 @@ export default function HomePage() {
         layer.tags?.includes("sentinel-rgb") ||
         layer.source?.toLowerCase().includes("sentinel-2")
       ) &&
-      (layer.temporal_year !== undefined || (layer.acquisition_date && layer.acquisition_date.length >= 4)),
+      (layer.temporal_year !== undefined || (typeof layer.acquisition_date === "string" && layer.acquisition_date.length >= 4)),
     );
     for (const layer of rgbCandidates) {
       const temporalYear = typeof layer.temporal_year === "number"
@@ -898,10 +1126,10 @@ export default function HomePage() {
     let active = true;
 
     async function loadOverview() {
-      if (overviewLayerIds.length === 0 && !censusAvailable && !treesAvailable && !buildingsAvailable && !nutzungAvailable) {
+      if (!censusAvailable && !treesAvailable && !buildingsAvailable && !nutzungAvailable && !dsmAvailable) {
         if (!active) return;
-        setOverviewResults([]);
         setOverviewBuildingStats(null);
+        setOverviewElevationStats(null);
         setOverviewVulnerability(null);
         setOverviewTreeStats(null);
         setOverviewLandUse(null);
@@ -912,27 +1140,19 @@ export default function HomePage() {
       setOverviewPending(true);
       setOverviewError(null);
       try {
-        const [boundaryFc, buildingsFc] = await Promise.all([
+        const [boundaryFc] = await Promise.all([
           fetchJson<{ features: Array<{ geometry: { type: "Polygon"; coordinates: number[][][] } }> }>("/api/vectors/planegg-boundary"),
-          fetchJson<{ features: Array<{ properties?: Record<string, unknown> }> }>("/api/vectors/buildings-3d-planegg"),
         ]);
 
         const boundary = boundaryFc.features[0]?.geometry;
         if (!boundary) throw new Error("Boundary geometry unavailable.");
 
-        const stats = overviewLayerIds.length > 0
-          ? await fetchAreaStatistics({
-              geometry: boundary,
-              layer_ids: overviewLayerIds,
-            })
-          : { results: [] };
-
         const vulnerability = censusAvailable
           ? await fetchHeatVulnerability({
               geometry: boundary,
               census_layer_id: "census-2022-100m-planegg",
-              lst_layer_id: lstAvailable ? "lst-planegg" : null,
-              ndvi_layer_id: ndviAvailable ? "ndvi-planegg" : null,
+              lst_layer_id: null,
+              ndvi_layer_id: null,
             })
           : null;
 
@@ -951,32 +1171,26 @@ export default function HomePage() {
             })
           : null;
 
-        const buildingsOverviewIds = overviewLayerIds.filter((id) => id === "ndvi-planegg" || id === "lst-planegg");
-        const buildingsOverview = buildingsAvailable
-          ? await fetchBuildingsOverview({
-              layer_ids: buildingsOverviewIds,
-              buildings_layer_id: "buildings-3d-planegg",
+        const buildings = buildingsAvailable
+          ? await fetchBuildingStatistics({
+              geometry: boundary,
+              layer_id: "buildings-3d-planegg",
             })
-          : { results: [] };
+          : null;
 
-        const heights = buildingsFc.features
-          .map((feature) => extractBuildingHeight((feature.properties ?? {}) as Record<string, unknown>))
-          .filter((value) => Number.isFinite(value) && value > 0);
+        const elevation = dsmAvailable
+          ? await fetchElevationStatistics({
+              geometry: boundary,
+              layer_id: "dsm-planegg",
+            })
+          : null;
 
         if (!active) return;
-        setOverviewResults(stats.results);
         setOverviewVulnerability(vulnerability?.result ?? null);
         setOverviewTreeStats(treeStats?.result ?? null);
         setOverviewLandUse(landUse?.result ?? null);
-        setOverviewBuildingClimate(buildingsOverview.results);
-        setOverviewBuildingStats(
-          buildingsAvailable
-            ? {
-                count: buildingsFc.features.length,
-                averageHeight: heights.length > 0 ? heights.reduce((sum, h) => sum + h, 0) / heights.length : 0,
-              }
-            : null,
-        );
+        setOverviewBuildingStats(buildings?.result ?? null);
+        setOverviewElevationStats(elevation?.result ?? null);
       } catch (err) {
         if (!active) return;
         setOverviewError(err instanceof Error ? err : new Error("Failed to load area overview"));
@@ -989,7 +1203,7 @@ export default function HomePage() {
     return () => {
       active = false;
     };
-  }, [overviewLayerIds, censusAvailable, lstAvailable, ndviAvailable, treesAvailable, buildingsAvailable, nutzungAvailable]);
+  }, [censusAvailable, treesAvailable, buildingsAvailable, nutzungAvailable, dsmAvailable]);
 
   useEffect(() => {
     let active = true;
@@ -1158,8 +1372,9 @@ export default function HomePage() {
     setDrawMode(false);
     setDrawnPoints([]);
     setDrawnGeometry(null);
-    areaStatistics.reset();
     heatVulnerability.reset();
+    buildingStatistics.reset();
+    elevationStatistics.reset();
     treeStatistics.reset();
     drawnHeatSeriesStatistics.reset();
     drawnLulcSeriesStatistics.reset();
@@ -1276,19 +1491,26 @@ export default function HomePage() {
   useEffect(() => {
     if (!hasDrawnSelection || !drawnGeometry) return;
 
-    areaStatistics.mutate({
-      geometry: drawnGeometry,
-      layer_ids: inspectableRasterLayers.map((layer) => layer.id),
-    });
-
-    if (censusVisible) {
+    if (censusAvailable) {
       heatVulnerability.mutate({
         geometry: drawnGeometry,
-        lstLayerId: lstVisible ? "lst-planegg" : null,
-        ndviLayerId: ndviVisible ? "ndvi-planegg" : null,
+        lstLayerId: null,
+        ndviLayerId: null,
       });
     } else {
       heatVulnerability.reset();
+    }
+
+    if (buildingsAvailable) {
+      buildingStatistics.mutate({ geometry: drawnGeometry });
+    } else {
+      buildingStatistics.reset();
+    }
+
+    if (dsmAvailable) {
+      elevationStatistics.mutate({ geometry: drawnGeometry });
+    } else {
+      elevationStatistics.reset();
     }
 
     if (treesAvailable) {
@@ -1305,10 +1527,9 @@ export default function HomePage() {
   }, [
     hasDrawnSelection,
     drawnGeometry,
-    inspectableRasterLayers,
-    censusVisible,
-    lstVisible,
-    ndviVisible,
+    censusAvailable,
+    buildingsAvailable,
+    dsmAvailable,
     treesAvailable,
     nutzungAvailable,
   ]);
@@ -1336,12 +1557,21 @@ export default function HomePage() {
   }, [allBuildingHeights, selectedBuilding, selectedBuildingHeight]);
 
   const useDrawnView = analysisView === "drawn" && hasDrawnSelection;
-  const analysisResults = useDrawnView ? areaStatistics.data?.results : overviewResults;
-  const analysisPending = useDrawnView ? areaStatistics.isPending : overviewPending;
-  const analysisError = useDrawnView ? areaStatistics.error : overviewError;
+  const analysisPending = useDrawnView
+    ? (heatVulnerability.isPending || treeStatistics.isPending || landUseComposition.isPending || buildingStatistics.isPending || elevationStatistics.isPending)
+    : overviewPending;
+  const analysisError = useDrawnView
+    ? (heatVulnerability.error ?? treeStatistics.error ?? landUseComposition.error ?? buildingStatistics.error ?? elevationStatistics.error ?? null)
+    : overviewError;
   const vulnerabilityResult = useDrawnView ? (heatVulnerability.data ?? null) : overviewVulnerability;
   const vulnerabilityPending = useDrawnView ? heatVulnerability.isPending : overviewPending;
   const vulnerabilityError = useDrawnView ? heatVulnerability.error : null;
+  const buildingStatsResult = useDrawnView ? (buildingStatistics.data ?? null) : overviewBuildingStats;
+  const buildingStatsPending = useDrawnView ? buildingStatistics.isPending : overviewPending;
+  const buildingStatsError = useDrawnView ? buildingStatistics.error : null;
+  const elevationStatsResult = useDrawnView ? (elevationStatistics.data ?? null) : overviewElevationStats;
+  const elevationStatsPending = useDrawnView ? elevationStatistics.isPending : overviewPending;
+  const elevationStatsError = useDrawnView ? elevationStatistics.error : null;
   const treeStatsResult = useDrawnView ? (treeStatistics.data ?? null) : overviewTreeStats;
   const treeStatsPending = useDrawnView ? treeStatistics.isPending : overviewPending;
   const treeStatsError = useDrawnView ? treeStatistics.error : null;
@@ -1368,7 +1598,7 @@ export default function HomePage() {
 
   return (
     <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#05070d] text-slate-100">
-      <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-white/5 bg-[#05070d]/90 px-4 backdrop-blur-md">
+      <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-white/5 bg-[#05070d]/90 px-4 backdrop-blur-md">
         <div>
           <h1 className="text-sm font-semibold tracking-wide text-cyan-300">Urban Climate Tool</h1>
           <p className="text-[11px] text-slate-500">Planegg · satellite-derived climate indicators</p>
@@ -1382,7 +1612,7 @@ export default function HomePage() {
                 dashboardMode === "analysis" ? "bg-cyan-400/15 text-cyan-200" : "text-slate-300 hover:bg-white/10"
               }`}
             >
-              Analysis
+              My Commune
             </button>
             <button
               type="button"
@@ -1472,7 +1702,12 @@ export default function HomePage() {
               </label>
             </div>
           ) : null}
-          <BasemapSwitcher value={basemap} onChange={setBasemap} />
+          <BasemapSwitcher
+            value={basemap}
+            satelliteSource={satelliteBasemapSource}
+            onChange={setBasemap}
+            onSatelliteSourceChange={setSatelliteBasemapSource}
+          />
         </div>
       </header>
 
@@ -1488,6 +1723,7 @@ export default function HomePage() {
             onBuildingClick={handleBuildingClick}
             onNutzungClick={handleNutzungClick}
             basemap={basemap}
+            satelliteBasemapSource={satelliteBasemapSource}
             terrain3dEnabled={terrain3dEnabled}
             terrainSource={terrainSource}
             terrainAvailable={terrainAvailable}
@@ -1625,6 +1861,95 @@ export default function HomePage() {
                   </div>
                 </div>
               </CollapsiblePanel>
+
+              <CollapsiblePanel
+                title="Shade Simulation"
+                isOpen={shadeSimulationPanelOpen}
+                onToggle={() => setShadeSimulationPanelOpen((v) => !v)}
+                widthClass="w-80"
+              >
+                <div className="space-y-2 text-[11px] text-slate-300">
+                  {hourlyShadeOptions.length === 0 ? (
+                    <p className="text-[10px] text-slate-500">No hourly shade layers found. Generate and register layers like shade-overpass-YYYYMMDD-HHMM.</p>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleShadeSimulationStart}
+                        className="w-full rounded-full bg-cyan-400 px-4 py-2 text-[11px] font-semibold text-slate-950 transition hover:bg-cyan-300"
+                      >
+                        Start simulation
+                      </button>
+                      <p className="text-[10px] text-slate-500">Use the slider in the simulator card below to step through the day.</p>
+                      <div className="rounded-2xl border border-cyan-400/20 bg-slate-950/75 px-4 py-3 text-center shadow-2xl shadow-cyan-950/30 backdrop-blur-lg">
+                        <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-white/5 px-3 py-2">
+                          <div className="text-left">
+                            <p className="text-[9px] uppercase tracking-[0.32em] text-cyan-300/80">Shade simulator</p>
+                            <p className="text-[10px] text-slate-400">Hourly shade controls inside the panel</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleShadeSimulationToggle}
+                              disabled={!shadeSimulationEnabled || hourlyShadeOptions.length === 0}
+                              className="rounded-full bg-cyan-400 px-3 py-1 text-[10px] font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {shadeSimulationPlaying ? "Pause" : "Play"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShadeSimulationPlaying(false);
+                                setShadeSimulationEnabled(false);
+                              }}
+                              disabled={!shadeSimulationEnabled && !shadeSimulationPlaying}
+                              className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-medium text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Disable
+                            </button>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                          <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">Simulated day</p>
+                          <p className="mt-1 text-sm font-medium tracking-[0.12em] text-cyan-300">
+                            {selectedHourlyShadeLabel ?? "No hour selected"}
+                          </p>
+                          <p className="mt-1 text-4xl font-semibold tracking-tight text-white">
+                            {selectedHourlyShadeShortLabel ?? "--:--"}
+                          </p>
+                          <p className="mt-1 text-lg font-semibold tracking-tight text-white">
+                            {selectedHourlyShadeDayLabel ?? "Select a shade hour to begin"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            Date: {selectedHourlyShadeDateLabel ?? "--/--/----"}
+                          </p>
+                          <div className="mt-3">
+                            <input
+                              type="range"
+                              min={0}
+                              max={Math.max(0, hourlyShadeOptions.length - 1)}
+                              step={1}
+                              value={Math.max(0, selectedHourlyShadeIndex)}
+                              onChange={(event) => {
+                                const idx = Number(event.target.value);
+                                const option = hourlyShadeOptions[idx];
+                                if (!option) return;
+                                setSelectedHourlyShadeLayerId(option.layerId);
+                              }}
+                              disabled={!shadeSimulationEnabled || hourlyShadeOptions.length === 0}
+                              className="w-full accent-cyan-400"
+                            />
+                            <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+                              <span>{formatShadeTimeLabel(hourlyShadeOptions[0]?.timeKey ?? "")}</span>
+                              <span>{formatShadeTimeLabel(hourlyShadeOptions[hourlyShadeOptions.length - 1]?.timeKey ?? "")}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CollapsiblePanel>
             </div>
           </div>
 
@@ -1653,9 +1978,20 @@ export default function HomePage() {
               ))}
               {activeLayers.length > 0 ? (
                 <div className="glass-panel rounded-xl p-2">
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-300">Active layers (top → bottom)</div>
-                  <div className="max-h-64 space-y-1 overflow-y-auto">
-                    {activeLayers.map((layer, index) => (
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wide text-cyan-300">
+                    <span>Active layers (top → bottom)</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveLayersExpanded((value) => !value)}
+                      className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-slate-200 transition hover:bg-white/10"
+                      aria-label={activeLayersExpanded ? "Collapse active layers" : "Expand active layers"}
+                    >
+                      {activeLayersExpanded ? "Collapse" : "Expand"}
+                    </button>
+                  </div>
+                  {activeLayersExpanded ? (
+                    <div className="max-h-64 space-y-1 overflow-y-auto">
+                      {activeLayers.map((layer, index) => (
                       <div
                         key={`active-${layer.id}`}
                         onDragEnter={(event) => {
@@ -1761,7 +2097,12 @@ export default function HomePage() {
                         </div>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="rounded bg-white/[0.04] px-2 py-1 text-[10px] text-slate-400">
+                      {activeLayers.length} active layer{activeLayers.length === 1 ? "" : "s"} visible
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -1940,7 +2281,7 @@ export default function HomePage() {
           >
             {analysisPanelOpen ? (
               <span className="text-xs font-semibold uppercase tracking-wide text-cyan-300">
-                {dashboardMode === "analysis" ? "Area analysis" : dashboardMode === "heat-development" ? "Heat development" : "Land cover change"}
+                {dashboardMode === "analysis" ? "My Commune" : dashboardMode === "heat-development" ? "Heat development" : "Land cover change"}
               </span>
             ) : null}
             <svg
@@ -1967,7 +2308,7 @@ export default function HomePage() {
                           : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
                       }`}
                     >
-                      Planegg Overview
+                      Gemeinde Planegg
                     </button>
                     <button
                       type="button"
@@ -1985,29 +2326,32 @@ export default function HomePage() {
                     </button>
                   </div>
                   <AnalysisPanel
-                    results={analysisResults}
                     isPending={analysisPending}
                     error={analysisError}
+                    municipalityName="Gemeinde Planegg"
+                    scopeLabel={useDrawnView ? "Selected area" : "Gemeinde Planegg"}
+                    latestLulcYear={useDrawnView ? drawnLandCoverSummary.year : latestLulcSummary.year}
+                    latestLulcItems={useDrawnView ? drawnLandCoverSummary.items : latestLulcSummary.items}
                     treeStats={treeStatsResult}
                     treeStatsPending={treeStatsPending}
                     treeStatsError={treeStatsError}
-                    overviewMode={!useDrawnView}
-                    overviewBuildingStats={overviewBuildingStats}
-                    overviewBuildingClimate={overviewBuildingClimate}
+                    buildingStats={buildingStatsResult}
+                    buildingStatsPending={buildingStatsPending}
+                    buildingStatsError={buildingStatsError}
+                    elevationStats={elevationStatsResult}
+                    elevationStatsPending={elevationStatsPending}
+                    elevationStatsError={elevationStatsError}
                     vulnerability={vulnerabilityResult}
                     vulnerabilityPending={vulnerabilityPending}
                     vulnerabilityError={vulnerabilityError}
-                    lstPalette={lstPalette}
-                    ndviPalette={ndviPalette}
                     showBuildings={useDrawnView ? buildingsVisible : buildingsAvailable}
-                    showVulnerability={useDrawnView ? censusVisible : censusAvailable}
+                    showVulnerability={censusAvailable}
                     showTrees={useDrawnView ? treesAvailable : treesAvailable}
-                    showLandUse={useDrawnView ? nutzungVisible : nutzungAvailable}
+                    showLandUse={nutzungAvailable}
                     landUse={landUseResult}
                     landUsePending={landUsePending}
                     landUseError={landUseError}
                     totalAreaHectares={totalAreaHectares}
-                    visibleLayerIds={visibleRasterLayerIds}
                   />
                 </>
               ) : dashboardMode === "heat-development" ? (

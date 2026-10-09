@@ -64,6 +64,48 @@ export type TreeStatisticsResponse = {
   result: TreeStatisticsResult;
 };
 
+export type BuildingStatisticsResult = {
+  layer_id: string;
+  title?: string;
+  building_count: number;
+  area_hectares: number;
+  building_density_per_hectare?: number | null;
+  mean_height?: number | null;
+  median_height?: number | null;
+  maximum_height?: number | null;
+  minimum_height?: number | null;
+};
+
+export type BuildingStatisticsRequest = {
+  geometry: PolygonGeometry;
+  layer_id?: string;
+};
+
+export type BuildingStatisticsResponse = {
+  result: BuildingStatisticsResult;
+};
+
+export type ElevationStatisticsResult = {
+  layer_id: string;
+  title?: string;
+  units?: string | null;
+  area_hectares: number;
+  minimum_elevation?: number | null;
+  mean_elevation?: number | null;
+  median_elevation?: number | null;
+  maximum_elevation?: number | null;
+  stddev_elevation?: number | null;
+};
+
+export type ElevationStatisticsRequest = {
+  geometry: PolygonGeometry;
+  layer_id?: string;
+};
+
+export type ElevationStatisticsResponse = {
+  result: ElevationStatisticsResult;
+};
+
 export type AreaStatisticsRequest = {
   geometry: PolygonGeometry;
   layer_ids: string[];
@@ -122,12 +164,21 @@ export type HeatExposureBin = {
 export type VulnerabilitySummary = {
   census_cells: number;
   total_population?: number | null;
+  missing_population?: number | null;
   elderly_population?: number | null;
   elderly_share?: number | null;
   children_population?: number | null;
   children_share?: number | null;
   missing_elderly_population?: number | null;
   missing_children_population?: number | null;
+  population_categories?: PopulationCategorySummary[] | null;
+};
+
+export type PopulationCategorySummary = {
+  key: string;
+  label: string;
+  population?: number | null;
+  share?: number | null;
 };
 
 export type HeatVulnerabilityResult = {

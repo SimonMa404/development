@@ -10,7 +10,7 @@ import pandas as pd
 import rasterio
 from rasterio import features as rasterio_features
 from rasterio.mask import mask as rasterio_mask
-from shapely.geometry import box, shape
+from shapely.geometry import box, mapping, shape
 from shapely.ops import unary_union
 
 from app.core.config import settings
@@ -186,6 +186,125 @@ class StatisticsService:
             "maximum_height": float(valid_heights.max()) if not valid_heights.empty else None,
             "minimum_height": float(valid_heights.min()) if not valid_heights.empty else None,
             "mean_ground_elevation": float(valid_base_heights.mean()) if not valid_base_heights.empty else None,
+        }
+
+    def building_statistics(self, geometry: dict[str, Any], layer_id: str = "buildings-3d-planegg") -> dict[str, Any]:
+        layer = self.catalog_service.get_by_id(layer_id)
+        if layer.layer_type != "vector":
+            raise LayerUnavailableError(f"Layer '{layer_id}' is not a vector layer.")
+
+        layer_path = settings.data_root_path / layer.relative_path
+        if not layer_path.exists():
+            raise LayerUnavailableError(f"Buildings layer file not found: {layer.relative_path}")
+
+        selected_geom_4326 = shape(geometry)
+        selected_geom_25832 = gpd.GeoSeries([selected_geom_4326], crs="EPSG:4326").to_crs(epsg=25832).iloc[0]
+        area_hectares = float(selected_geom_25832.area / 10000) if not selected_geom_25832.is_empty else 0.0
+
+        buildings_gdf = self.vector_repository.read_frame(layer.relative_path, bbox=list(selected_geom_4326.bounds))
+        if buildings_gdf.empty:
+            return {
+                "layer_id": layer_id,
+                "title": layer.title,
+                "building_count": 0,
+                "area_hectares": area_hectares,
+                "building_density_per_hectare": 0.0 if area_hectares > 0 else None,
+                "mean_height": None,
+                "median_height": None,
+                "maximum_height": None,
+                "minimum_height": None,
+            }
+
+        if buildings_gdf.crs is None:
+            buildings_gdf = buildings_gdf.set_crs("EPSG:4326")
+
+        buildings_25832 = buildings_gdf.to_crs(epsg=25832) if str(buildings_gdf.crs) != "EPSG:25832" else buildings_gdf.copy()
+        intersections = buildings_25832.loc[buildings_25832.geometry.intersects(selected_geom_25832)].copy()
+
+        if intersections.empty:
+            return {
+                "layer_id": layer_id,
+                "title": layer.title,
+                "building_count": 0,
+                "area_hectares": area_hectares,
+                "building_density_per_hectare": 0.0 if area_hectares > 0 else None,
+                "mean_height": None,
+                "median_height": None,
+                "maximum_height": None,
+                "minimum_height": None,
+            }
+
+        heights = intersections.apply(lambda row: _extract_building_height(row), axis=1)
+        valid_heights = pd.to_numeric(heights, errors="coerce").dropna()
+        valid_heights = valid_heights[valid_heights > 0]
+        building_count = int(len(intersections))
+
+        return {
+            "layer_id": layer_id,
+            "title": layer.title,
+            "building_count": building_count,
+            "area_hectares": area_hectares,
+            "building_density_per_hectare": float(building_count / area_hectares) if area_hectares > 0 else None,
+            "mean_height": float(valid_heights.mean()) if not valid_heights.empty else None,
+            "median_height": float(valid_heights.median()) if not valid_heights.empty else None,
+            "maximum_height": float(valid_heights.max()) if not valid_heights.empty else None,
+            "minimum_height": float(valid_heights.min()) if not valid_heights.empty else None,
+        }
+
+    def elevation_statistics(self, geometry: dict[str, Any], layer_id: str = "dsm-planegg") -> dict[str, Any]:
+        layer = self.catalog_service.get_by_id(layer_id)
+        if layer.layer_type != "raster":
+            raise LayerUnavailableError(f"Layer '{layer_id}' is not a raster layer.")
+
+        requested_path = self.repository.raster_path(layer.relative_path)
+        dem_candidates = [
+            settings.data_root_path / "rasters/processed/planegg/dem_1m_terrain_cog.tif",
+            settings.data_root_path / "rasters/processed/planegg/dem_1m.tif",
+        ]
+
+        # Prefer DEM for elevation summary (ground elevation), then fallback to requested layer.
+        path = next((candidate for candidate in dem_candidates if candidate.exists()), requested_path)
+        if not path.exists():
+            raise LayerUnavailableError(f"Elevation raster file not found for layer '{layer_id}'.")
+
+        selected_geometry = shape(geometry)
+        selected_geom_25832 = gpd.GeoSeries([selected_geometry], crs="EPSG:4326").to_crs(epsg=25832).iloc[0]
+        area_hectares = float(selected_geom_25832.area / 10000) if not selected_geom_25832.is_empty else 0.0
+
+        with rasterio.open(path) as dataset:
+            nodata = layer.nodata if layer.nodata is not None else dataset.nodata
+            if dataset.crs is not None:
+                selected_geom_dataset_crs = (
+                    gpd.GeoSeries([selected_geometry], crs="EPSG:4326")
+                    .to_crs(dataset.crs)
+                    .iloc[0]
+                )
+                mask_geometry = [mapping(selected_geom_dataset_crs)]
+            else:
+                mask_geometry = [geometry]
+            try:
+                out_image, _ = rasterio_mask(dataset, mask_geometry, crop=True, nodata=nodata, filled=True)
+            except ValueError:
+                stats = dict(_EMPTY_STATS)
+            else:
+                band = out_image[0]
+                if nodata is not None:
+                    selected_masked = np.ma.masked_equal(band, nodata)
+                else:
+                    selected_masked = np.ma.masked_invalid(band)
+                stats = _compute_stats(selected_masked, layer.value_type)
+
+        no_data = stats["count"] == 0
+        return {
+            "layer_id": layer_id,
+            "title": layer.title,
+            "units": layer.units,
+            "area_hectares": area_hectares,
+            "minimum_elevation": None if no_data else float(stats["minimum"]),
+            "mean_elevation": None if no_data else float(stats["mean"]),
+            "median_elevation": None if no_data else float(stats["median"]),
+            "maximum_elevation": None if no_data else float(stats["maximum"]),
+            "stddev_elevation": None if no_data else float(stats["stddev"]),
         }
 
     def area_statistics(self, geometry: dict[str, Any], layer_ids: list[str]) -> list[dict[str, Any]]:
@@ -469,6 +588,11 @@ class StatisticsService:
         total_population = _sum_nullable(population)
         elderly_population = _sum_nullable(elderly_count)
         children_population = _sum_nullable(children_count)
+        missing_population = _sum_nullable(population[population.isna()])
+
+        working_age_population: float | None = None
+        if total_population is not None and elderly_population is not None and children_population is not None:
+            working_age_population = float(max(0.0, total_population - elderly_population - children_population))
 
         elderly_share_total = None
         if total_population and elderly_population is not None:
@@ -520,12 +644,33 @@ class StatisticsService:
             "summary": {
                 "census_cells": int(len(selected_4326)),
                 "total_population": total_population,
+                "missing_population": missing_population,
                 "elderly_population": elderly_population,
                 "elderly_share": elderly_share_total,
                 "children_population": children_population,
                 "children_share": children_share_total,
                 "missing_elderly_population": missing_elderly_population,
                 "missing_children_population": missing_children_population,
+                "population_categories": [
+                    {
+                        "key": "children_u18",
+                        "label": "Children (<18)",
+                        "population": children_population,
+                        "share": children_share_total,
+                    },
+                    {
+                        "key": "working_age_18_64",
+                        "label": "Working age (18-64)",
+                        "population": working_age_population,
+                        "share": None if total_population in (None, 0) or working_age_population is None else float(working_age_population / total_population),
+                    },
+                    {
+                        "key": "elderly_65_plus",
+                        "label": "Elderly (65+)",
+                        "population": elderly_population,
+                        "share": elderly_share_total,
+                    },
+                ],
             },
             "lst_exposure_bins": lst_exposures,
             "ndvi_exposure_bins": ndvi_exposures,
@@ -857,6 +1002,33 @@ def _numeric_series(frame: gpd.GeoDataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(np.nan, index=frame.index, dtype=float)
     return pd.to_numeric(frame[column], errors="coerce")
+
+
+def _extract_building_height(row: pd.Series) -> float | None:
+    def as_number(value: Any) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not np.isfinite(number):
+            return None
+        return number
+
+    direct = as_number(row.get("height"))
+    if direct is not None and direct > 0:
+        return direct
+
+    roof = as_number(row.get("roof_height"))
+    ground = as_number(row.get("ground_height"))
+    if roof is not None and ground is not None and roof > ground:
+        return roof - ground
+
+    z_max = as_number(row.get("z_max"))
+    z_min = as_number(row.get("z_min"))
+    if z_max is not None and z_min is not None and z_max > z_min:
+        return z_max - z_min
+
+    return None
 
 
 def _find_bin(value: float, bins: list[dict[str, float | str | None]]) -> int | None:

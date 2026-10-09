@@ -87,6 +87,60 @@ class TreeStatisticsResponse(BaseModel):
     result: TreeStatisticsResult
 
 
+class BuildingStatisticsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    geometry: dict
+    layer_id: str = "buildings-3d-planegg"
+
+
+class BuildingStatisticsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    layer_id: str
+    title: str | None = None
+    building_count: int
+    area_hectares: float
+    building_density_per_hectare: float | None = None
+    mean_height: float | None = None
+    median_height: float | None = None
+    maximum_height: float | None = None
+    minimum_height: float | None = None
+
+
+class BuildingStatisticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: BuildingStatisticsResult
+
+
+class ElevationStatisticsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    geometry: dict
+    layer_id: str = "dsm-planegg"
+
+
+class ElevationStatisticsResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    layer_id: str
+    title: str | None = None
+    units: str | None = None
+    area_hectares: float
+    minimum_elevation: float | None = None
+    mean_elevation: float | None = None
+    median_elevation: float | None = None
+    maximum_elevation: float | None = None
+    stddev_elevation: float | None = None
+
+
+class ElevationStatisticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: ElevationStatisticsResult
+
+
 class BuildingContextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -151,17 +205,28 @@ class HeatExposureBin(BaseModel):
     children_population: float | None = None
 
 
+class PopulationCategorySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    population: float | None = None
+    share: float | None = None
+
+
 class VulnerabilitySummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     census_cells: int
     total_population: float | None = None
+    missing_population: float | None = None
     elderly_population: float | None = None
     elderly_share: float | None = None
     children_population: float | None = None
     children_share: float | None = None
     missing_elderly_population: float | None = None
     missing_children_population: float | None = None
+    population_categories: list[PopulationCategorySummary] | None = None
 
 
 class HeatVulnerabilityResult(BaseModel):

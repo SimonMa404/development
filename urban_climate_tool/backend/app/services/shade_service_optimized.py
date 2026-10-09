@@ -25,11 +25,12 @@ import rasterio
 from rasterio.enums import Resampling
 from rasterio.io import MemoryFile
 from rasterio.transform import from_bounds
-from rasterio.features import rasterize
+from rasterio.features import rasterize, shapes
 from rasterio.mask import mask as raster_mask
 from rasterio.warp import reproject
 from shapely.geometry import Point, Polygon, shape
 from shapely.ops import unary_union
+from shapely.affinity import scale as scale_geometry
 import geopandas as gpd
 from affine import Affine
 
@@ -64,6 +65,8 @@ class ShadeServiceOptimized:
         gdf_trees: gpd.GeoDataFrame,
         dem_crs: Any,
         canopy_buffer_m: float = 0.0,
+        preserve_shell_layers: bool = True,
+        tree_crown_scale: float = 1.0,
     ) -> list[tuple[Any, float]]:
         """Reduce tree features to one canopy geometry per tree id where possible.
 
@@ -91,7 +94,7 @@ class ShadeServiceOptimized:
                     except (ValueError, TypeError):
                         canopy_height = 12.0
                     # Approximate crown radius from tree height (simple allometry).
-                    crown_radius = float(np.clip(canopy_height * 0.25, 1.5, 6.0))
+                    crown_radius = float(np.clip(canopy_height * 0.28, 2.0, 9.0)) * float(max(0.6, tree_crown_scale))
                     geom = row.geometry.buffer(crown_radius)
                     if canopy_buffer_m > 0:
                         geom = geom.buffer(canopy_buffer_m)
@@ -105,6 +108,33 @@ class ShadeServiceOptimized:
                     ]
                     if not filtered.empty:
                         canopy_parts = filtered
+
+                if preserve_shell_layers and "tree_part" in canopy_parts.columns and "canopy_shell_top" in canopy_parts.columns:
+                    for _, shell_row in canopy_parts.iterrows():
+                        geom = shell_row.geometry
+                        if geom is None or geom.is_empty:
+                            continue
+                        if tree_crown_scale and abs(float(tree_crown_scale) - 1.0) > 1e-6:
+                            centroid = geom.centroid
+                            geom = scale_geometry(
+                                geom,
+                                xfact=float(tree_crown_scale),
+                                yfact=float(tree_crown_scale),
+                                origin=centroid,
+                            )
+                        if canopy_buffer_m > 0:
+                            geom = geom.buffer(canopy_buffer_m)
+                        canopy_height = shell_row.get("canopy_shell_top")
+                        if canopy_height is None:
+                            canopy_height = shell_row.get("height", 12.0)
+                        try:
+                            canopy_height = float(canopy_height)
+                        except (ValueError, TypeError):
+                            canopy_height = 12.0
+                        if canopy_height <= 0:
+                            canopy_height = 12.0
+                        selected_rows.append((geom, canopy_height))
+                    continue
 
                 if "canopy_shell_top" in canopy_parts.columns:
                     canopy_heights = canopy_parts["canopy_shell_top"].fillna(0).astype(float)
@@ -123,6 +153,14 @@ class ShadeServiceOptimized:
                 geom = unary_union([g for g in canopy_parts.geometry if g is not None and not g.is_empty])
                 if geom is None or geom.is_empty:
                     continue
+                if tree_crown_scale and abs(float(tree_crown_scale) - 1.0) > 1e-6:
+                    centroid = geom.centroid
+                    geom = scale_geometry(
+                        geom,
+                        xfact=float(tree_crown_scale),
+                        yfact=float(tree_crown_scale),
+                        origin=centroid,
+                    )
                 if canopy_buffer_m > 0:
                     geom = geom.buffer(canopy_buffer_m)
                 selected_rows.append((geom, canopy_height))
@@ -139,7 +177,7 @@ class ShadeServiceOptimized:
                     canopy_height = float(canopy_height)
                 except (ValueError, TypeError):
                     canopy_height = 12.0
-                crown_radius = float(np.clip(canopy_height * 0.25, 1.5, 6.0))
+                crown_radius = float(np.clip(canopy_height * 0.28, 2.0, 9.0)) * float(max(0.6, tree_crown_scale))
                 geom = row.geometry.buffer(crown_radius)
                 if canopy_buffer_m > 0:
                     geom = geom.buffer(canopy_buffer_m)
@@ -150,6 +188,14 @@ class ShadeServiceOptimized:
             if canopy_shell_top is None or canopy_shell_top <= 0:
                 canopy_shell_top = row.get("height", 12.0)
             geom = row.geometry
+            if tree_crown_scale and abs(float(tree_crown_scale) - 1.0) > 1e-6 and geom is not None and not geom.is_empty:
+                centroid = geom.centroid
+                geom = scale_geometry(
+                    geom,
+                    xfact=float(tree_crown_scale),
+                    yfact=float(tree_crown_scale),
+                    origin=centroid,
+                )
             if canopy_buffer_m > 0:
                 geom = geom.buffer(canopy_buffer_m)
             tree_features.append((geom, float(canopy_shell_top)))
@@ -179,6 +225,227 @@ class ShadeServiceOptimized:
         # Return the groups as a stable list of batches.
         return [groups for _, groups in sorted(buckets.items(), key=lambda item: len(item[1]), reverse=True)]
 
+    def _parse_forest_classes(self, forest_classes: str | list[int] | tuple[int, ...] | None) -> tuple[int, ...]:
+        if forest_classes is None:
+            return (1,)
+        if isinstance(forest_classes, str):
+            values = []
+            for part in forest_classes.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    values.append(int(part))
+                except ValueError:
+                    continue
+            return tuple(values) if values else (1,)
+        values = []
+        for item in forest_classes:
+            try:
+                values.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        return tuple(values) if values else (1,)
+
+    @staticmethod
+    def _to_float(value: Any) -> float | None:
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _resolve_building_height_above_ground(self, row: Any) -> float:
+        """Return building height above local ground, not absolute roof elevation."""
+        roof_height = self._to_float(row.get("roof_height"))
+        ground_height = self._to_float(row.get("ground_height"))
+        explicit_height = self._to_float(row.get("height"))
+
+        if roof_height is not None and ground_height is not None:
+            relative = roof_height - ground_height
+            if 1.5 <= relative <= 120.0:
+                return float(relative)
+
+        if explicit_height is not None and 1.5 <= explicit_height <= 120.0:
+            return float(explicit_height)
+
+        if roof_height is not None and 1.5 <= roof_height <= 120.0:
+            return float(roof_height)
+
+        return 6.0
+
+    def _smooth_tree_canopy_heights(
+        self,
+        tree_canopy: np.ndarray,
+        passes: int = 2,
+        blend: float = 0.55,
+    ) -> np.ndarray:
+        """Round off canopy spikes with a lightweight masked 3x3 smoothing pass."""
+        if tree_canopy.size == 0:
+            return tree_canopy
+
+        canopy_mask = tree_canopy > 0
+        if not np.any(canopy_mask):
+            return tree_canopy
+
+        smoothed = tree_canopy.astype(np.float32, copy=True)
+        blend = float(np.clip(blend, 0.0, 1.0))
+
+        for _ in range(max(0, int(passes))):
+            mask_f = canopy_mask.astype(np.float32)
+
+            padded_vals = np.pad(smoothed, ((1, 1), (1, 1)), mode="constant", constant_values=0)
+            padded_mask = np.pad(mask_f, ((1, 1), (1, 1)), mode="constant", constant_values=0)
+
+            sum9 = (
+                padded_vals[:-2, :-2] + padded_vals[:-2, 1:-1] + padded_vals[:-2, 2:]
+                + padded_vals[1:-1, :-2] + padded_vals[1:-1, 1:-1] + padded_vals[1:-1, 2:]
+                + padded_vals[2:, :-2] + padded_vals[2:, 1:-1] + padded_vals[2:, 2:]
+            )
+            count9 = (
+                padded_mask[:-2, :-2] + padded_mask[:-2, 1:-1] + padded_mask[:-2, 2:]
+                + padded_mask[1:-1, :-2] + padded_mask[1:-1, 1:-1] + padded_mask[1:-1, 2:]
+                + padded_mask[2:, :-2] + padded_mask[2:, 1:-1] + padded_mask[2:, 2:]
+            )
+
+            local_mean = np.divide(sum9, count9, out=np.zeros_like(smoothed), where=count9 > 0)
+            smoothed = np.where(canopy_mask, (1.0 - blend) * smoothed + blend * local_mean, 0.0).astype(np.float32)
+
+        return smoothed
+
+    def _build_large_forest_core_geometry(
+        self,
+        forest_lulc_raster_path: Path,
+        dem_crs: Any,
+        boundary_geom: Any | None,
+        forest_classes: tuple[int, ...],
+        min_forest_patch_area_m2: float,
+        forest_edge_buffer_m: float,
+        forest_probability_raster_path: Path | None = None,
+        forest_probability_threshold: float = 0.6,
+    ) -> Any | None:
+        """Build interior geometry of large forest patches.
+
+        Steps:
+        1) Extract forest pixels from land-cover classes
+        2) Optionally filter with forest/tree probability threshold
+        3) Keep only large contiguous forest patches
+        4) Apply negative buffer so forest edges remain individual-tree mode
+        """
+        if not forest_lulc_raster_path.exists():
+            return None
+
+        with rasterio.open(forest_lulc_raster_path) as lulc_src:
+            lulc = lulc_src.read(1)
+            lulc_mask = np.ones(lulc.shape, dtype=bool)
+            if lulc_src.nodata is not None:
+                lulc_mask = lulc != lulc_src.nodata
+
+            forest_mask = np.isin(lulc.astype(np.int32, copy=False), np.array(forest_classes, dtype=np.int32))
+            forest_mask &= lulc_mask
+
+            if forest_probability_raster_path and forest_probability_raster_path.exists():
+                with rasterio.open(forest_probability_raster_path) as prob_src:
+                    prob = np.zeros(lulc.shape, dtype=np.float32)
+                    reproject(
+                        source=prob_src.read(1),
+                        destination=prob,
+                        src_transform=prob_src.transform,
+                        src_crs=prob_src.crs,
+                        dst_transform=lulc_src.transform,
+                        dst_crs=lulc_src.crs,
+                        resampling=Resampling.bilinear,
+                    )
+                    prob_max = float(np.nanmax(prob)) if prob.size else 0.0
+                    if prob_max > 1.5:
+                        prob = prob / 100.0
+                    forest_mask &= prob >= float(forest_probability_threshold)
+
+            if not np.any(forest_mask):
+                return None
+
+            polygons: list[Any] = []
+            for geom, val in shapes(
+                forest_mask.astype(np.uint8),
+                mask=forest_mask,
+                transform=lulc_src.transform,
+            ):
+                if int(val) != 1:
+                    continue
+                shp = shape(geom)
+                if shp is None or shp.is_empty:
+                    continue
+                polygons.append(shp)
+
+            if not polygons:
+                return None
+
+            forest_gdf = gpd.GeoDataFrame({"geometry": polygons}, crs=lulc_src.crs)
+
+        if forest_gdf.crs != dem_crs:
+            forest_gdf = forest_gdf.to_crs(dem_crs)
+
+        if boundary_geom is not None:
+            forest_gdf = forest_gdf[forest_gdf.geometry.intersects(boundary_geom)]
+            if not forest_gdf.empty:
+                forest_gdf = forest_gdf.copy()
+                forest_gdf["geometry"] = forest_gdf.geometry.intersection(boundary_geom)
+
+        if forest_gdf.empty:
+            return None
+
+        # Keep only very large forest patches.
+        forest_gdf = forest_gdf[forest_gdf.geometry.area >= float(min_forest_patch_area_m2)]
+        if forest_gdf.empty:
+            return None
+
+        if forest_edge_buffer_m > 0:
+            forest_gdf = forest_gdf.copy()
+            forest_gdf["geometry"] = forest_gdf.geometry.buffer(-float(forest_edge_buffer_m))
+            forest_gdf = forest_gdf[~forest_gdf.geometry.is_empty]
+            forest_gdf = forest_gdf[forest_gdf.geometry.area > 0]
+
+        if forest_gdf.empty:
+            return None
+
+        return unary_union([g for g in forest_gdf.geometry if g is not None and not g.is_empty])
+
+    def _aggregate_forest_features(
+        self,
+        forest_features: list[tuple[Any, float]],
+        forest_batch_cell_size_m: float,
+        forest_min_features_per_patch: int,
+        forest_height_quantile: float,
+    ) -> list[tuple[Any, float]]:
+        """Aggregate dense forest tree features into patch-level canopy geometries."""
+        if not forest_features:
+            return []
+
+        aggregated: list[tuple[Any, float]] = []
+        forest_batches = self._bucket_tree_features(forest_features, cell_size_m=float(forest_batch_cell_size_m))
+        q = float(np.clip(forest_height_quantile, 0.5, 1.0))
+
+        for batch in forest_batches:
+            if len(batch) < int(max(2, forest_min_features_per_patch)):
+                aggregated.extend(batch)
+                continue
+
+            geoms = [geom for geom, _ in batch if geom is not None and not geom.is_empty]
+            if not geoms:
+                continue
+
+            merged = unary_union(geoms)
+            if merged is None or merged.is_empty:
+                aggregated.extend(batch)
+                continue
+
+            heights = np.array([float(h) for _, h in batch], dtype=np.float32)
+            patch_height = float(np.quantile(heights, q))
+            aggregated.append((merged, patch_height))
+
+        return aggregated
+
     def build_dsm_with_obstruction_layers(
         self,
         dem_path: Path,
@@ -189,6 +456,17 @@ class ShadeServiceOptimized:
         output_tree_canopy_path: Path | None = None,
         boundary_geojson: Path | None = None,
         tree_canopy_buffer_m: float = 0.0,
+        forest_lulc_raster_path: Path | None = None,
+        forest_probability_raster_path: Path | None = None,
+        forest_classes: str | list[int] | tuple[int, ...] = "1",
+        forest_probability_threshold: float = 0.6,
+        min_forest_patch_area_m2: float = 150000.0,
+        forest_edge_buffer_m: float = 60.0,
+        forest_batch_cell_size_m: float = 220.0,
+        forest_min_features_per_patch: int = 50,
+        forest_height_quantile: float = 0.9,
+        tree_crown_scale: float = 1.25,
+        preserve_tree_shell_layers: bool = True,
     ) -> None:
         """Build DSM by combining DEM, buildings, and trees (vectorized)."""
         logger.info("Building DSM from DEM, buildings, and trees...")
@@ -247,8 +525,14 @@ class ShadeServiceOptimized:
             with rasterio.open(output_building_heights_path) as b_src:
                 cached = b_src.read(1).astype(np.float32)
             if cached.shape == (height, width):
-                building_heights = cached
-                building_summary = f"cached raster ({output_building_heights_path.name})"
+                cached_max = float(np.nanmax(cached)) if cached.size else 0.0
+                if 0.01 < cached_max <= 120.0:
+                    building_heights = cached
+                    building_summary = f"cached raster ({output_building_heights_path.name})"
+                else:
+                    logger.info("  Cached building raster looks invalid for above-ground heights; rebuilding")
+                    print("  Cached building raster invalid; rebuilding...", file=sys.stderr)
+                    sys.stderr.flush()
             else:
                 logger.info("  Cached building raster shape mismatch; rebuilding for boundary extent")
                 print("  Cached building raster shape mismatch; rebuilding...", file=sys.stderr)
@@ -273,19 +557,8 @@ class ShadeServiceOptimized:
             # Prepare all building geometries with heights
             building_shapes = []
             for idx, row in gdf_buildings.iterrows():
-                roof_height = row.get("roof_height")
-                if roof_height is None or roof_height == "":
-                    roof_height = row.get("height", 6.0)
-                else:
-                    try:
-                        roof_height = float(roof_height)
-                    except (ValueError, TypeError):
-                        roof_height = row.get("height", 6.0)
-
-                if roof_height is None or roof_height <= 0:
-                    roof_height = 6.0
-
-                building_shapes.append((row.geometry, float(roof_height)))
+                building_height = self._resolve_building_height_above_ground(row)
+                building_shapes.append((row.geometry, float(building_height)))
 
             logger.info(f"  Rasterizing {len(building_shapes)} buildings...")
             print(f"  Rasterizing {len(building_shapes)} buildings...", file=sys.stderr)
@@ -321,19 +594,35 @@ class ShadeServiceOptimized:
         print("[CHECKPOINT 3] Adding trees...", file=sys.stderr)
         sys.stderr.flush()
         cp3_start = time.time()
-        if output_tree_canopy_path and output_tree_canopy_path.exists():
+        can_reuse_tree_cache = (
+            abs(float(tree_crown_scale) - 1.0) < 1e-6
+            and not bool(preserve_tree_shell_layers)
+            and float(tree_canopy_buffer_m) <= 0.0
+        )
+        if output_tree_canopy_path and output_tree_canopy_path.exists() and can_reuse_tree_cache:
             logger.info(f"  Reusing cached tree canopy raster: {output_tree_canopy_path}")
             print(f"  Reusing cached tree canopy raster: {output_tree_canopy_path.name}", file=sys.stderr)
             sys.stderr.flush()
             with rasterio.open(output_tree_canopy_path) as t_src:
                 cached = t_src.read(1).astype(np.float32)
             if cached.shape == (height, width):
-                tree_canopy = cached
-                tree_summary = f"cached raster ({output_tree_canopy_path.name})"
+                cached_max = float(np.nanmax(cached)) if cached.size else 0.0
+                cache_nonzero_fraction = float(np.count_nonzero(cached > 0) / cached.size) if cached.size else 0.0
+                if cached_max > 0.01 and cache_nonzero_fraction > 0.002:
+                    tree_canopy = cached
+                    tree_summary = f"cached raster ({output_tree_canopy_path.name})"
+                else:
+                    logger.info("  Cached tree canopy raster is empty; rebuilding from vectors")
+                    print("  Cached tree canopy raster is empty; rebuilding...", file=sys.stderr)
+                    sys.stderr.flush()
             else:
                 logger.info("  Cached tree canopy raster shape mismatch; rebuilding for boundary extent")
                 print("  Cached tree canopy raster shape mismatch; rebuilding...", file=sys.stderr)
                 sys.stderr.flush()
+        elif output_tree_canopy_path and output_tree_canopy_path.exists():
+            logger.info("  Rebuilding tree canopy raster because enhanced crown modelling is enabled")
+            print("  Rebuilding tree canopy raster for enhanced crown modelling...", file=sys.stderr)
+            sys.stderr.flush()
         if tree_summary == "0 features" and trees_geojson.exists():
             logger.info(f"  Loading {trees_geojson}...")
             print(f"  Loading trees...", file=sys.stderr)
@@ -345,10 +634,13 @@ class ShadeServiceOptimized:
                 logger.info(f"  Reprojecting to {dem_crs}...")
                 print(f"  Reprojecting...", file=sys.stderr)
                 sys.stderr.flush()
+                gdf_trees = gdf_trees.to_crs(dem_crs)
 
             if boundary_gdf is not None:
                 boundary_geom = boundary_gdf.geometry.unary_union
                 gdf_trees = gdf_trees[gdf_trees.geometry.intersects(boundary_geom)]
+            else:
+                boundary_geom = None
 
             # Reduce multiple parts per tree to one canopy polygon per tree,
             # then bucket spatially so large forest areas are rasterized in batches.
@@ -356,15 +648,76 @@ class ShadeServiceOptimized:
                 gdf_trees,
                 dem_crs,
                 canopy_buffer_m=float(tree_canopy_buffer_m),
+                preserve_shell_layers=bool(preserve_tree_shell_layers),
+                tree_crown_scale=float(tree_crown_scale),
             )
             if tree_canopy_buffer_m > 0:
                 logger.info(f"  Applying tree canopy buffer: {tree_canopy_buffer_m:.2f} m")
-            tree_batches = self._bucket_tree_features(tree_shapes, cell_size_m=100.0)
+            if abs(float(tree_crown_scale) - 1.0) > 1e-6:
+                logger.info(f"  Applying tree crown scale: {float(tree_crown_scale):.2f}x")
+
+            forest_core_geom = None
+            parsed_forest_classes = self._parse_forest_classes(forest_classes)
+            if forest_lulc_raster_path and forest_lulc_raster_path.exists():
+                try:
+                    forest_core_geom = self._build_large_forest_core_geometry(
+                        forest_lulc_raster_path=forest_lulc_raster_path,
+                        dem_crs=dem_crs,
+                        boundary_geom=boundary_geom,
+                        forest_classes=parsed_forest_classes,
+                        min_forest_patch_area_m2=float(min_forest_patch_area_m2),
+                        forest_edge_buffer_m=float(forest_edge_buffer_m),
+                        forest_probability_raster_path=forest_probability_raster_path,
+                        forest_probability_threshold=float(forest_probability_threshold),
+                    )
+                except Exception as exc:
+                    logger.warning(f"  Forest-core detection failed, falling back to all-individual trees: {exc}")
+
+            urban_tree_shapes: list[tuple[Any, float]] = []
+            forest_tree_shapes: list[tuple[Any, float]] = []
+            if forest_core_geom is not None and not forest_core_geom.is_empty:
+                for geom, canopy_height in tree_shapes:
+                    if geom is None or geom.is_empty:
+                        continue
+                    ref_pt = geom.representative_point()
+                    if forest_core_geom.contains(ref_pt):
+                        forest_tree_shapes.append((geom, canopy_height))
+                    else:
+                        urban_tree_shapes.append((geom, canopy_height))
+            else:
+                urban_tree_shapes = tree_shapes
+
+            aggregated_forest_shapes = self._aggregate_forest_features(
+                forest_tree_shapes,
+                forest_batch_cell_size_m=float(forest_batch_cell_size_m),
+                forest_min_features_per_patch=int(forest_min_features_per_patch),
+                forest_height_quantile=float(forest_height_quantile),
+            )
+
+            if forest_tree_shapes:
+                logger.info(
+                    "  Forest mode active: classes=%s, min_patch=%.1f ha, edge_buffer=%.1f m",
+                    parsed_forest_classes,
+                    float(min_forest_patch_area_m2) / 10000.0,
+                    float(forest_edge_buffer_m),
+                )
+
+            urban_batches = self._bucket_tree_features(urban_tree_shapes, cell_size_m=70.0)
+            forest_batches = self._bucket_tree_features(
+                aggregated_forest_shapes,
+                cell_size_m=float(forest_batch_cell_size_m),
+            )
+            tree_batches = urban_batches + forest_batches
 
             logger.info(f"  Reduced to {len(tree_shapes)} canopy features in {len(tree_batches)} spatial batches")
-            tree_summary = f"{len(tree_shapes)} canopy features in {len(tree_batches)} batches"
+            tree_summary = (
+                f"{len(tree_shapes)} canopy features -> urban {len(urban_tree_shapes)} + "
+                f"forest {len(forest_tree_shapes)} ({len(aggregated_forest_shapes)} aggregated), "
+                f"{len(tree_batches)} batches"
+            )
             print(
-                f"  Rasterizing {len(tree_shapes)} canopies in {len(tree_batches)} batches (forest areas batch together)...",
+                f"  Rasterizing urban {len(urban_tree_shapes)} + forest {len(forest_tree_shapes)} canopies "
+                f"({len(aggregated_forest_shapes)} aggregated forest patches) in {len(tree_batches)} batches...",
                 file=sys.stderr,
             )
             sys.stderr.flush()
@@ -381,7 +734,8 @@ class ShadeServiceOptimized:
                     dtype=np.float32,
                 )
                 tree_canopy = np.maximum(tree_canopy, mask)
-                
+
+            tree_canopy = self._smooth_tree_canopy_heights(tree_canopy, passes=2, blend=0.55)
 
             print("\n", end='', file=sys.stderr)  # Newline after progress bar
             sys.stderr.flush()
@@ -410,8 +764,10 @@ class ShadeServiceOptimized:
             print(f"  ✓ Tree canopy written ({tc_size:.1f} MB)", file=sys.stderr)
 
         # Merge DEM + building heights + tree canopy into final DSM at the end.
-        dsm = np.maximum(dem, building_heights)
-        dsm = np.maximum(dsm, tree_canopy)
+        building_surface = np.where(building_heights > 0, dem + building_heights, dem)
+        tree_surface = np.where(tree_canopy > 0, dem + tree_canopy, dem)
+        dsm = np.maximum(dem, building_surface)
+        dsm = np.maximum(dsm, tree_surface)
 
         # Overwrite DSM with the merged result now that all obstruction layers are known.
         output_dsm_path.parent.mkdir(parents=True, exist_ok=True)
@@ -446,6 +802,7 @@ class ShadeServiceOptimized:
         times: list[str] | None = None,
         tree_transmissivity: float = 0.2,
         tree_canopy_path: Path | None = None,
+        dem_path: Path | None = None,
         boundary_geojson: Path | None = None,
         working_scale: float = 5.0,
         max_shadow_distance_m: int = 250,
@@ -485,6 +842,32 @@ class ShadeServiceOptimized:
                 dsm = dsm_src.read(1).astype(np.float32)
                 dsm_transform = dsm_src.transform
             height, width = int(dsm.shape[0]), int(dsm.shape[1])
+
+        ground_surface = None
+        if dem_path and dem_path.exists():
+            with rasterio.open(dem_path) as dem_src:
+                dem_crs = dem_src.crs
+                if dem_crs != dsm_crs:
+                    raise RuntimeError(f"DEM CRS ({dem_crs}) must match DSM CRS ({dsm_crs})")
+                if boundary_gdf is not None:
+                    dem_cropped, _ = raster_mask(
+                        dem_src,
+                        boundary_gdf.geometry,
+                        crop=True,
+                        filled=True,
+                        nodata=-9999,
+                    )
+                    ground_surface = dem_cropped[0].astype(np.float32)
+                else:
+                    ground_surface = dem_src.read(1).astype(np.float32)
+            if ground_surface.shape != dsm.shape:
+                raise RuntimeError(
+                    f"DEM shape {ground_surface.shape} does not match DSM shape {dsm.shape}. "
+                    "Regenerate DEM/DSM with the same boundary."
+                )
+        else:
+            logger.warning("No DEM supplied for ground-shade product; using DSM as fallback ground receiver")
+            ground_surface = dsm.copy()
 
         working_scale = max(1.0, float(working_scale))
         if working_scale < 1.0:
@@ -547,8 +930,21 @@ class ShadeServiceOptimized:
                 resampling=Resampling.max,
             )
 
+        ground_surface_coarse = np.zeros((coarse_height, coarse_width), dtype=np.float32)
+        reproject(
+            source=ground_surface,
+            destination=ground_surface_coarse,
+            src_transform=dsm_transform,
+            src_crs=dsm_crs,
+            dst_transform=coarse_transform,
+            dst_crs=dsm_crs,
+            resampling=Resampling.average,
+        )
+
         sun_hours = np.zeros((coarse_height, coarse_width), dtype=np.float32)
         shade_hours = np.zeros((coarse_height, coarse_width), dtype=np.float32)
+        sun_hours_ground = np.zeros((coarse_height, coarse_width), dtype=np.float32)
+        shade_hours_ground = np.zeros((coarse_height, coarse_width), dtype=np.float32)
 
         # Location for solar calculations (Planegg)
         location = pvlib.location.Location(latitude=48.09, longitude=11.42, tz=timezone)
@@ -575,22 +971,66 @@ class ShadeServiceOptimized:
 
             if elevation <= 0:
                 shade_hours += 1
+                shade_hours_ground += 1
                 continue
 
             # Compute shade map for this timestamp
-            shade_map = self._compute_shade_map(
+            shade_map_surface = self._compute_shade_map(
                 dsm_coarse,
                 elevation,
                 azimuth,
-                tree_canopy_coarse,
-                tree_transmissivity,
+                receiver_surface=dsm_coarse,
+                tree_canopy=tree_canopy_coarse,
+                tree_transmissivity=tree_transmissivity,
                 max_shadow_distance_m=max_shadow_distance_m,
                 cell_size_m=cell_size_m,
             )
 
+            shade_map_ground = self._compute_shade_map(
+                dsm_coarse,
+                elevation,
+                azimuth,
+                receiver_surface=ground_surface_coarse,
+                tree_canopy=tree_canopy_coarse,
+                tree_transmissivity=tree_transmissivity,
+                max_shadow_distance_m=max_shadow_distance_m,
+                cell_size_m=cell_size_m,
+            )
+
+            # Save each hour as an individual overpass raster for map animation/slider use.
+            time_key = time_str.replace(":", "")
+            hourly_surface_path = output_dir / f"shade_overpass_{date}_{time_key}.tif"
+            hourly_ground_path = output_dir / f"shade_ground_overpass_{date}_{time_key}.tif"
+            hourly_surface_full = np.zeros((height, width), dtype=np.float32)
+            hourly_ground_full = np.zeros((height, width), dtype=np.float32)
+            reproject(
+                source=shade_map_surface.astype(np.float32),
+                destination=hourly_surface_full,
+                src_transform=coarse_transform,
+                src_crs=dsm_crs,
+                dst_transform=dsm_transform,
+                dst_crs=dsm_crs,
+                resampling=Resampling.nearest,
+            )
+            reproject(
+                source=shade_map_ground.astype(np.float32),
+                destination=hourly_ground_full,
+                src_transform=coarse_transform,
+                src_crs=dsm_crs,
+                dst_transform=dsm_transform,
+                dst_crs=dsm_crs,
+                resampling=Resampling.nearest,
+            )
+            self._write_raster(hourly_surface_full, hourly_surface_path, dsm_transform, dsm_crs, -9999)
+            self._write_raster(hourly_ground_full, hourly_ground_path, dsm_transform, dsm_crs, -9999)
+            logger.info(f"    ✓ {hourly_surface_path.name}")
+            logger.info(f"    ✓ {hourly_ground_path.name}")
+
             # Aggregate
-            sun_hours += (1 - shade_map)
-            shade_hours += shade_map
+            sun_hours += (1 - shade_map_surface)
+            shade_hours += shade_map_surface
+            sun_hours_ground += (1 - shade_map_ground)
+            shade_hours_ground += shade_map_ground
 
         print()  # Newline after progress bar
         cp3_time = time.time() - cp3_start
@@ -604,11 +1044,17 @@ class ShadeServiceOptimized:
         sun_hours_path = output_dir / f"sun_hours_{date}.tif"
         shade_hours_path = output_dir / f"shade_hours_{date}.tif"
         shade_fraction_path = output_dir / f"shade_fraction_{date}.tif"
+        sun_hours_ground_path = output_dir / f"sun_hours_ground_{date}.tif"
+        shade_hours_ground_path = output_dir / f"shade_hours_ground_{date}.tif"
+        shade_fraction_ground_path = output_dir / f"shade_fraction_ground_{date}.tif"
 
         # Upsample the coarse outputs back to full resolution for visualization.
         full_sun_hours = np.zeros((height, width), dtype=np.float32)
         full_shade_hours = np.zeros((height, width), dtype=np.float32)
         full_shade_fraction = np.zeros((height, width), dtype=np.float32)
+        full_sun_hours_ground = np.zeros((height, width), dtype=np.float32)
+        full_shade_hours_ground = np.zeros((height, width), dtype=np.float32)
+        full_shade_fraction_ground = np.zeros((height, width), dtype=np.float32)
 
         reproject(
             source=sun_hours,
@@ -637,6 +1083,33 @@ class ShadeServiceOptimized:
             dst_crs=dsm_crs,
             resampling=Resampling.nearest,
         )
+        reproject(
+            source=sun_hours_ground,
+            destination=full_sun_hours_ground,
+            src_transform=coarse_transform,
+            src_crs=dsm_crs,
+            dst_transform=dsm_transform,
+            dst_crs=dsm_crs,
+            resampling=Resampling.nearest,
+        )
+        reproject(
+            source=shade_hours_ground,
+            destination=full_shade_hours_ground,
+            src_transform=coarse_transform,
+            src_crs=dsm_crs,
+            dst_transform=dsm_transform,
+            dst_crs=dsm_crs,
+            resampling=Resampling.nearest,
+        )
+        reproject(
+            source=(shade_hours_ground / len(times)).astype(np.float32),
+            destination=full_shade_fraction_ground,
+            src_transform=coarse_transform,
+            src_crs=dsm_crs,
+            dst_transform=dsm_transform,
+            dst_crs=dsm_crs,
+            resampling=Resampling.nearest,
+        )
 
         self._write_raster(full_sun_hours, sun_hours_path, dsm_transform, dsm_crs, -9999)
         logger.info(f"    ✓ {sun_hours_path.name}")
@@ -646,6 +1119,12 @@ class ShadeServiceOptimized:
         
         self._write_raster(full_shade_fraction, shade_fraction_path, dsm_transform, dsm_crs, -9999)
         logger.info(f"    ✓ {shade_fraction_path.name}")
+        self._write_raster(full_sun_hours_ground, sun_hours_ground_path, dsm_transform, dsm_crs, -9999)
+        logger.info(f"    ✓ {sun_hours_ground_path.name}")
+        self._write_raster(full_shade_hours_ground, shade_hours_ground_path, dsm_transform, dsm_crs, -9999)
+        logger.info(f"    ✓ {shade_hours_ground_path.name}")
+        self._write_raster(full_shade_fraction_ground, shade_fraction_ground_path, dsm_transform, dsm_crs, -9999)
+        logger.info(f"    ✓ {shade_fraction_ground_path.name}")
 
         cp4_time = time.time() - cp4_start
 
@@ -658,71 +1137,73 @@ class ShadeServiceOptimized:
         logger.info(f"  - Writing: {cp4_time:.2f}s")
         logger.info(f"\n  Sun hours: {sun_hours.min():.1f} - {sun_hours.max():.1f}")
         logger.info(f"  Shade hours: {shade_hours.min():.1f} - {shade_hours.max():.1f}")
+        logger.info(f"  Ground shade hours: {shade_hours_ground.min():.1f} - {shade_hours_ground.max():.1f}")
 
     def _compute_shade_map(
         self,
-        dsm: np.ndarray,
+        obstruction_surface: np.ndarray,
         elevation: float,
         azimuth: float,
+        receiver_surface: np.ndarray | None = None,
         tree_canopy: np.ndarray | None = None,
         tree_transmissivity: float = 0.2,
         max_shadow_distance_m: int = 250,
         cell_size_m: float = 1.0,
     ) -> np.ndarray:
         """Compute shade map using approximate ray-casting."""
-        # Convert azimuth/elevation to ray direction
-        az_rad = np.radians(azimuth)
-        el_rad = np.radians(elevation)
-        
-        # Ray direction (dx, dy per meter horizontal)
-        dx = np.sin(az_rad)
-        # Raster rows increase southward, so northward movement is negative row offset.
-        dy = -np.cos(az_rad)
-        
-        # Height angle tangent (dz per meter horizontal)
+        # pvlib azimuth is measured clockwise from north, while raster rows increase
+        # southward (down the image). Convert to a raster-space sun direction so that
+        # the ray truly points toward the sun, and not a mirrored or rotated variant.
+        az_rad = np.radians(float(azimuth))
+        el_rad = np.radians(float(elevation))
+
+        # Sun direction in raster coordinates: x east is +x, y north is -row.
+        # This means a sun in the east should move to the right, while a sun in the
+        # north should move upward in the raster.
+        sun_dx = np.sin(az_rad)
+        sun_dy = -np.cos(az_rad)
+
+        # The actual shadow is the opposite vector, but for occlusion checking we
+        # march from the target pixel toward the sun, which is the physically correct
+        # direction for a ray-tracing test.
         tan_el = np.tan(el_rad)
 
-        height, width = dsm.shape
+        if receiver_surface is None:
+            receiver_surface = obstruction_surface
+
+        height, width = obstruction_surface.shape
         shade = np.zeros((height, width), dtype=np.float32)
 
-        # For each pixel, check if ray toward sun is blocked
+        # For each pixel, check if the line-of-sight to the sun is interrupted by a
+        # higher nearby surface. The ray is allowed to extend far enough to capture
+        # low-angle morning/evening shading.
         y_idx, x_idx = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
-        pixel_height = dsm[y_idx, x_idx]
+        pixel_height = receiver_surface[y_idx, x_idx]
 
-        # Ray-casting: march from pixel toward sun direction
-        # Check if any surface along ray is higher than expected solar angle
-        max_shadow_distance_m = max(20, int(max_shadow_distance_m))
+        max_shadow_distance_m = max(100, int(max_shadow_distance_m))
         cell_size_m = max(0.1, float(cell_size_m))
-        max_steps = max(1, int(np.ceil(max_shadow_distance_m / cell_size_m)))
+        step_size_m = max(cell_size_m, 1.0)
+        max_steps = max(1, int(np.ceil(max_shadow_distance_m / step_size_m)))
+
         for step in range(1, max_steps + 1):
-            # Ray position at this step
-            ray_x = x_idx + step * dx
-            ray_y = y_idx + step * dy
-            
-            # Expected height at this distance
-            horizontal_distance_m = step * cell_size_m
+            horizontal_distance_m = step * step_size_m
+            ray_x = x_idx + step * sun_dx * (step_size_m / cell_size_m)
+            ray_y = y_idx + step * sun_dy * (step_size_m / cell_size_m)
             expected_height = pixel_height + horizontal_distance_m * tan_el
 
-            # Check bounds
             valid = (ray_x >= 0) & (ray_x < width) & (ray_y >= 0) & (ray_y < height)
             if not valid.any():
                 break
 
-            # Get terrain elevation at ray position (bilinear interpolation)
             ray_x_int = np.rint(ray_x).astype(int)
             ray_y_int = np.rint(ray_y).astype(int)
-            
-            # Clamp to valid range
             ray_x_int = np.clip(ray_x_int, 0, width - 1)
             ray_y_int = np.clip(ray_y_int, 0, height - 1)
-            
-            terrain_height = dsm[ray_y_int, ray_x_int]
 
-            # If terrain is higher than expected solar ray, pixel is shaded
+            terrain_height = obstruction_surface[ray_y_int, ray_x_int]
             shaded = valid & (terrain_height > expected_height)
             shade = np.where(shaded, 1.0, shade)
 
-        # Apply tree transmissivity (partial attenuation)
         if tree_canopy is not None:
             under_tree = tree_canopy > 0
             canopy_shade_floor = float(np.clip(1.0 - tree_transmissivity, 0.0, 1.0))

@@ -55,6 +55,14 @@ def terrain_status(source: str = Query(default="dem")) -> dict[str, Any]:
     }
 
 
+@router.get("/terrain/stats")
+def terrain_stats(source: str = Query(default="dem")) -> dict[str, Any]:
+    try:
+        return raster_service.terrain_statistics(source)
+    except LayerUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/terrain/{z}/{x}/{y}.png")
 def get_terrain_tile(z: int, x: int, y: int, source: str = Query(default="dem")) -> Response:
     try:

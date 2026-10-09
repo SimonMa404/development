@@ -6,12 +6,16 @@ from app.core.errors import LayerNotFoundError, LayerUnavailableError
 from app.schemas.analysis import (
     AreaStatisticsRequest,
     AreaStatisticsResponse,
+    BuildingStatisticsRequest,
+    BuildingStatisticsResponse,
     BuildingContextRequest,
     BuildingContextResponse,
     BuildingOverviewRequest,
     BuildingOverviewResponse,
     ChangeDetectionRequest,
     ChangeDetectionResponse,
+    ElevationStatisticsRequest,
+    ElevationStatisticsResponse,
     HeatVulnerabilityRequest,
     HeatVulnerabilityResponse,
     LandUseCompositionRequest,
@@ -47,6 +51,30 @@ def tree_statistics(payload: TreeStatisticsRequest) -> TreeStatisticsResponse:
     except LayerUnavailableError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return TreeStatisticsResponse(result=result)
+
+
+@router.post("/analysis/building-statistics", response_model=BuildingStatisticsResponse)
+def building_statistics(payload: BuildingStatisticsRequest) -> BuildingStatisticsResponse:
+    service = StatisticsService(CatalogService())
+    try:
+        result = service.building_statistics(payload.geometry, payload.layer_id)
+    except LayerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LayerUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return BuildingStatisticsResponse(result=result)
+
+
+@router.post("/analysis/elevation-statistics", response_model=ElevationStatisticsResponse)
+def elevation_statistics(payload: ElevationStatisticsRequest) -> ElevationStatisticsResponse:
+    service = StatisticsService(CatalogService())
+    try:
+        result = service.elevation_statistics(payload.geometry, payload.layer_id)
+    except LayerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LayerUnavailableError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ElevationStatisticsResponse(result=result)
 
 
 @router.post("/analysis/building-context", response_model=BuildingContextResponse)

@@ -74,6 +74,36 @@ def test_heat_vulnerability_endpoint() -> None:
     assert "lst_exposure_bins" in body["result"]
 
 
+def test_building_statistics_endpoint() -> None:
+    payload = {
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[11.415, 48.095], [11.435, 48.095], [11.435, 48.105], [11.415, 48.105], [11.415, 48.095]]],
+        },
+        "layer_id": "buildings-3d-planegg",
+    }
+    response = client.post("/api/analysis/building-statistics", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert "result" in body
+    assert "building_count" in body["result"]
+
+
+def test_elevation_statistics_endpoint() -> None:
+    payload = {
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[11.415, 48.095], [11.435, 48.095], [11.435, 48.105], [11.415, 48.105], [11.415, 48.095]]],
+        },
+        "layer_id": "dsm-planegg",
+    }
+    response = client.post("/api/analysis/elevation-statistics", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert "result" in body
+    assert "mean_elevation" in body["result"]
+
+
 def test_relative_summer_lst_series_endpoint() -> None:
     response = client.get("/api/layers/time-series/lst-relative-summer?include_unavailable=true")
     assert response.status_code == 200

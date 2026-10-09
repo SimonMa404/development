@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
+import type { StyleSpecification } from "maplibre-gl";
 import type { CatalogLayer } from "@/types/layers";
 import type { Feature, Polygon } from "geojson";
 
@@ -64,6 +65,7 @@ const NUTZUNG_COLOR_MATCH_EXPRESSION: any = [
 ];
 
 export type BasemapId = "satellite" | "hybrid" | "dark";
+export type SatelliteBasemapSource = "bayern-20cm" | "global";
 export type TerrainSourceId = "dem" | "dom" | "dsm";
 
 type ClickedVectorFeature = {
@@ -75,7 +77,16 @@ type ClickedVectorFeature = {
 
 const ESRI_ATTRIBUTION = "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
 
-function rasterStyle(tiles: string[], attribution: string, maxzoom = 20) {
+function rasterStyle(
+  tiles: string[],
+  attribution: string,
+  layerMaxzoom = 24,
+  sourceMaxzoom = 20,
+): {
+  version: 8;
+  sources: Record<string, unknown>;
+  layers: Array<Record<string, unknown>>;
+} {
   return {
     version: 8 as const,
     sources: {
@@ -84,6 +95,7 @@ function rasterStyle(tiles: string[], attribution: string, maxzoom = 20) {
         tiles,
         tileSize: 256,
         attribution,
+        maxzoom: sourceMaxzoom,
       },
     },
     layers: [
@@ -92,24 +104,67 @@ function rasterStyle(tiles: string[], attribution: string, maxzoom = 20) {
         type: "raster" as const,
         source: "base",
         minzoom: 0,
-        maxzoom,
+        maxzoom: layerMaxzoom,
       },
     ],
   };
 }
 
-const BASEMAP_STYLES: Record<BasemapId, ReturnType<typeof rasterStyle>> = {
-  satellite: rasterStyle(
-    ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-    ESRI_ATTRIBUTION,
-  ),
+const BASEMAP_STYLES: Record<Exclude<BasemapId, "satellite">, { version: 8; sources: Record<string, unknown>; layers: Array<Record<string, unknown>> }> = {
   hybrid: rasterStyle(["https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"], "Imagery © Google", 20),
   dark: rasterStyle(
     ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"],
     "Esri, HERE, Garmin, (c) OpenStreetMap contributors, and the GIS user community",
     16,
+    16,
   ),
 };
+
+function satelliteStyle(
+  apiBaseUrl: string,
+  source: SatelliteBasemapSource,
+): { version: 8; sources: Record<string, unknown>; layers: Array<Record<string, unknown>> } {
+  return {
+    version: 8 as const,
+    sources: {
+      global: {
+        type: "raster" as const,
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256,
+        attribution: ESRI_ATTRIBUTION,
+        maxzoom: 19,
+      },
+      bayern20cm: {
+        type: "raster" as const,
+        tiles: [`${apiBaseUrl}/api/tiles/rgb20cm-planegg/{z}/{x}/{y}.png`],
+        tileSize: 256,
+        attribution: "© Bayerische Vermessungsverwaltung",
+        maxzoom: 20,
+      },
+    },
+    layers: [
+      {
+        id: "base-global",
+        type: "raster" as const,
+        source: "global",
+        minzoom: 0,
+        maxzoom: 24,
+      },
+      {
+        id: "overlay-bayern-20cm",
+        type: "raster" as const,
+        source: "bayern20cm",
+        minzoom: 0,
+        maxzoom: 24,
+        paint: {
+          "raster-opacity": source === "bayern-20cm" ? 1 : 0,
+          "raster-fade-duration": 0,
+          "raster-resampling": "nearest",
+        },
+      },
+    ],
+  };
+}
 
 const TRANSPARENT_STYLE = {
   version: 8 as const,
@@ -167,6 +222,7 @@ export function MapCanvas({
   onBuildingClick,
   onNutzungClick,
   basemap = "satellite",
+  satelliteBasemapSource = "bayern-20cm",
   terrain3dEnabled = false,
   terrainSource = "dem",
   terrainAvailable = false,
@@ -197,6 +253,7 @@ export function MapCanvas({
   onBuildingClick?: (payload: ClickedVectorFeature) => void;
   onNutzungClick?: (payload: ClickedVectorFeature) => void;
   basemap?: BasemapId;
+  satelliteBasemapSource?: SatelliteBasemapSource;
   terrain3dEnabled?: boolean;
   terrainSource?: TerrainSourceId;
   terrainAvailable?: boolean;
@@ -433,7 +490,12 @@ export function MapCanvas({
 
   const polygon = drawnPolygonFeature(drawnPoints);
   const hasDrawPolygon = Boolean(polygon);
-  const mapStyle = useMemo(() => BASEMAP_STYLES[basemap], [basemap]);
+  const mapStyle = useMemo(() => {
+    if (basemap === "satellite") {
+      return satelliteStyle(apiBaseUrl, satelliteBasemapSource);
+    }
+    return BASEMAP_STYLES[basemap];
+  }, [basemap, apiBaseUrl, satelliteBasemapSource]);
 
   useEffect(() => {
     const map = mapRef.current?.getMap();
@@ -576,7 +638,7 @@ export function MapCanvas({
               bearing: viewState.bearing,
             }
           : {})}
-        mapStyle={mapStyle}
+        mapStyle={mapStyle as unknown as StyleSpecification}
         style={{ width: "100%", height: "100%" }}
         cursor={drawMode ? "crosshair" : "grab"}
         onClick={handleClick}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -97,7 +98,17 @@ class RasterService:
         is_rgb = layer.value_type == "rgb" or (layer.style and layer.style.color_scale == "rgb")
         is_relative_summer_lst = layer.temporal_group == "relative_summer_lst"
         thematic_group = (layer.thematic_group or "").strip().lower()
-        is_shade_layer = thematic_group in {"shade", "shade & solar"} or layer.id.startswith(("sun-hours-", "shade-hours-", "shade-fraction-"))
+        is_shade_overpass = layer.id.startswith(("shade-overpass-", "shade-ground-overpass-"))
+        is_shade_layer = thematic_group in {"shade", "shade & solar"} or layer.id.startswith((
+            "sun-hours-",
+            "shade-hours-",
+            "shade-fraction-",
+            "shade-overpass-",
+            "sun-hours-ground-",
+            "shade-hours-ground-",
+            "shade-fraction-ground-",
+            "shade-ground-overpass-",
+        ))
         is_dsm_overlay = layer.id == "dsm-planegg"
 
         try:
@@ -170,6 +181,33 @@ class RasterService:
             rgba = np.concatenate([out[:3], alpha[None, :, :]], axis=0)
             return self._encode_rgba_png(rgba), "image/png"
 
+        if is_shade_overpass:
+            # Hourly shade intensity layer:
+            # - 0.0 (sunlit) => fully transparent
+            # - 1.0 (full shade) => opaque black
+            # - tree transmissivity values (e.g. 0.8 shade) => semi-transparent black
+            values = np.nan_to_num(image.data[0].astype(np.float32), nan=0.0)
+            values = np.clip(values, 0.0, 1.0)
+
+            if image.mask is not None:
+                base_mask = image.mask
+                if base_mask.ndim == 3:
+                    base_mask = base_mask[0]
+                valid_mask = base_mask > 0
+            else:
+                valid_mask = np.isfinite(image.data[0])
+
+            aoi_mask = self._planegg_aoi_mask_for_tile(image)
+            if aoi_mask is not None:
+                valid_mask = valid_mask & aoi_mask
+
+            alpha = np.clip(values * 255.0, 0, 255).astype(np.uint8)
+            alpha = np.where(valid_mask, alpha, 0).astype(np.uint8)
+
+            rgb = np.zeros((3, alpha.shape[0], alpha.shape[1]), dtype=np.uint8)
+            rgba = np.concatenate([rgb, alpha[None, :, :]], axis=0)
+            return self._encode_rgba_png(rgba), "image/png"
+
         if is_categorical:
             colormap = _build_categorical_colormap(palette)
             png_bytes = image.render(img_format="PNG", colormap=colormap)
@@ -216,6 +254,41 @@ class RasterService:
 
     def terrain_sources_available(self) -> dict[str, bool]:
         return {source: self.terrain_available(source) for source in self.TERRAIN_SOURCE_PATHS}
+
+    def terrain_statistics(self, source: str = "dem") -> dict[str, Any]:
+        source_path = self._resolve_terrain_source_path(source)
+        if source_path is None:
+            raise LayerUnavailableError(f"Unsupported terrain source '{source}'.")
+
+        path = self.repository.raster_path(source_path)
+        if not path.exists():
+            raise LayerUnavailableError(f"Terrain source '{source}' is unavailable.")
+
+        return self._terrain_statistics_cached(str(path), source)
+
+    @staticmethod
+    @lru_cache(maxsize=16)
+    def _terrain_statistics_cached(path_str: str, source: str) -> dict[str, Any]:
+        path = Path(path_str)
+        with rasterio.open(path) as dataset:
+            band = dataset.read(1, masked=True).astype(np.float64)
+            if dataset.nodata is not None:
+                band = np.ma.masked_equal(band, dataset.nodata)
+
+            values = band.compressed() if np.ma.isMaskedArray(band) else np.asarray(band).ravel()
+            values = values[np.isfinite(values)]
+            if values.size == 0:
+                raise LayerUnavailableError(f"Terrain source '{source}' contains no valid data.")
+
+            return {
+                "source": source,
+                "relative_path": path_str,
+                "minimum": float(values.min()),
+                "maximum": float(values.max()),
+                "mean": float(values.mean()),
+                "median": float(np.median(values)),
+                "sample_count": int(values.size),
+            }
 
     def get_terrain_tile(self, z: int, x: int, y: int, source: str = "dem") -> tuple[bytes, str]:
         tile_bytes = self._get_terrain_tile_cached(z, x, y, source)

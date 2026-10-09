@@ -343,6 +343,26 @@ Options:
 - `--tree-transmissivity FRACTION`: Fraction of sunlight passing through trees (0-1). Default: 0.2 (20%)
 - `--register`: Add generated layers to catalog/layers.yaml
 
+#### Large-forest-only tree batching (runtime optimization)
+
+To avoid processing every tree individually in very dense forest, DSM build now supports a mixed strategy:
+- Individual trees are preserved in urban/edge areas.
+- Only **very large forest interiors** are aggregated/batched.
+
+Recommended controls:
+- `--forest-lulc-raster storage/rasters/processed/planegg/lulc.tif`
+- `--forest-classes 1` (Dynamic World `trees` class)
+- `--forest-min-patch-area-ha 15` (only truly large forest patches)
+- `--forest-edge-buffer-m 60` (keeps transition zone as individual trees)
+- `--forest-batch-cell-size-m 220`
+- `--forest-min-features-per-patch 50`
+
+Optional probability refinement:
+- `--forest-probability-raster <path>`
+- `--forest-probability-threshold 0.6`
+
+This keeps city tree clusters out of forest aggregation while speeding up large contiguous woodland processing.
+
 ### Shade outputs
 
 Generated rasters are saved to `storage/rasters/derived/planegg/shade/` and include:
@@ -351,6 +371,14 @@ Generated rasters are saved to `storage/rasters/derived/planegg/shade/` and incl
 - `shade_fraction_*.tif`: Percentage of time in shade
 - `dsm_1m.tif`: Combined Digital Surface Model (terrain + buildings + trees)
 - `tree_canopy_1m.tif`: Tree-only obstruction layer (useful for transmissivity calculations)
+
+### Boundary-only policy (performance + consistency)
+
+All shade simulation products are computed and rendered for the Planegg municipal boundary only.
+No buffer or surrounding outside area is included for these layers.
+
+This boundary-only rule should be kept for future derived shade/solar layers as well. It improves
+runtime and keeps map overlays consistent with the analysis area.
 
 ### Shade modelling limitations
 

@@ -2,8 +2,12 @@ import { fetchJson, postJson } from "@/lib/api/client";
 import type {
   AreaStatisticsRequest,
   AreaStatisticsResponse,
+  BuildingStatisticsRequest,
+  BuildingStatisticsResponse,
   BuildingContextRequest,
   BuildingContextResponse,
+  ElevationStatisticsRequest,
+  ElevationStatisticsResponse,
   ChangeDetectionRequest,
   ChangeDetectionResponse,
   HeatVulnerabilityRequest,
@@ -24,6 +28,14 @@ export async function fetchAreaStatistics(request: AreaStatisticsRequest): Promi
 
 export async function fetchTreeStatistics(request: TreeStatisticsRequest): Promise<TreeStatisticsResponse> {
   return postJson<TreeStatisticsResponse, TreeStatisticsRequest>("/api/analysis/tree-statistics", request);
+}
+
+export async function fetchBuildingStatistics(request: BuildingStatisticsRequest): Promise<BuildingStatisticsResponse> {
+  return postJson<BuildingStatisticsResponse, BuildingStatisticsRequest>("/api/analysis/building-statistics", request);
+}
+
+export async function fetchElevationStatistics(request: ElevationStatisticsRequest): Promise<ElevationStatisticsResponse> {
+  return postJson<ElevationStatisticsResponse, ElevationStatisticsRequest>("/api/analysis/elevation-statistics", request);
 }
 
 export async function fetchBuildingContext(request: BuildingContextRequest): Promise<BuildingContextResponse> {
